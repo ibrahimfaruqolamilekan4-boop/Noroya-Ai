@@ -33,6 +33,46 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
 
+  // GitHub Auto-Sync states
+  const [ghToken, setGhToken] = useState("");
+  const [ghOwner, setGhOwner] = useState("");
+  const [ghRepo, setGhRepo] = useState("");
+  const [ghBranch, setGhBranch] = useState("main");
+  const [ghLoading, setGhLoading] = useState(false);
+  const [ghResult, setGhResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const handleGitHubSync = async () => {
+    if (!ghToken || !ghOwner || !ghRepo) {
+      setGhResult({ success: false, message: "Please provide your GitHub Token, Owner/Username, and Repository Name." });
+      return;
+    }
+    setGhLoading(true);
+    setGhResult(null);
+    try {
+      const res = await fetch("/api/github-sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: ghToken,
+          owner: ghOwner,
+          repo: ghRepo,
+          branch: ghBranch || "main",
+          commitMessage: "feat: automated push of AI Synthetic Trading workstation and Deriv API workspace"
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGhResult({ success: true, message: `Successfully pushed ${data.filesCount} files to ${ghOwner}/${ghRepo} (${ghBranch || "main"})! Commit SHA: ${data.commitSha.substring(0, 7)}` });
+      } else {
+        setGhResult({ success: false, message: data.error || "Failed to push to GitHub repository." });
+      }
+    } catch (err: any) {
+      setGhResult({ success: false, message: err.message || "Network error during GitHub synchronization." });
+    } finally {
+      setGhLoading(false);
+    }
+  };
+
   useEffect(() => {
     // Listen to Firebase Auth state
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -412,7 +452,7 @@ CREATE TABLE IF NOT EXISTS trades (
         </pre>
       </div>
 
-      {/* GitHub Repository Push & Export Guide */}
+      {/* GitHub Automated Sync & Push */}
       <div className="bg-[#111827] border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 h-48 w-48 bg-cyan-500/5 blur-[80px] rounded-full pointer-events-none"></div>
         <div className="flex items-center gap-3 mb-4">
@@ -421,44 +461,78 @@ CREATE TABLE IF NOT EXISTS trades (
           </div>
           <div>
             <h3 className="text-base font-bold font-display text-slate-100 flex items-center gap-2">
-              GitHub Repository Sync & Commit Guide
+              Automated GitHub Repository Sync & Push
               <span className="text-xs bg-cyan-950 border border-cyan-800 px-2 py-0.5 rounded-full text-cyan-300">
-                Ready to Push
+                Octokit Powered
               </span>
             </h3>
-            <p className="text-xs text-slate-400">Export your complete AI trading workstation and push to any new GitHub repository</p>
+            <p className="text-xs text-slate-400">Automatically push all project files, AI scanner components, and trading modules to your GitHub repository</p>
           </div>
         </div>
 
         <div className="space-y-4">
-          <p className="text-xs text-slate-300 leading-relaxed">
-            To push all your current project updates, AI scanner modules, and trading logs to a new GitHub repository, run the following commands in your local terminal or export project files from the AI Studio settings menu:
-          </p>
-
-          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 font-mono text-xs text-cyan-300 space-y-2">
-            <p className="text-slate-500"># 1. Initialize git repository if not already initialized</p>
-            <p>git init</p>
-            <p className="text-slate-500 pt-1"># 2. Stage all updated files and features</p>
-            <p>git add .</p>
-            <p className="text-slate-500 pt-1"># 3. Commit your changes with a descriptive message</p>
-            <p>git commit -m "feat: complete Synthetic Indices SMC AI workstation and Deriv live integration"</p>
-            <p className="text-slate-500 pt-1"># 4. Link your new GitHub repository and push</p>
-            <p>git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git</p>
-            <p>git branch -M main</p>
-            <p>git push -u origin main</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">GitHub Personal Access Token (PAT)</label>
+              <input
+                type="password"
+                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                value={ghToken}
+                onChange={(e) => setGhToken(e.target.value)}
+                className="w-true w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">Needs `repo` or `public_repo` scope permissions.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">GitHub Username / Organization</label>
+              <input
+                type="text"
+                placeholder="e.g. ibrahimfaruq"
+                value={ghOwner}
+                onChange={(e) => setGhOwner(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Repository Name</label>
+              <input
+                type="text"
+                placeholder="e.g. deriv-smc-ai-workstation"
+                value={ghRepo}
+                onChange={(e) => setGhRepo(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-300 mb-1">Branch Name</label>
+              <input
+                type="text"
+                placeholder="main"
+                value={ghBranch}
+                onChange={(e) => setGhBranch(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-cyan-500"
+              />
+            </div>
           </div>
+
+          {ghResult && (
+            <div className={`p-3 rounded-xl border text-xs font-mono leading-relaxed ${ghResult.success ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" : "bg-red-950/40 border-red-800 text-red-300"}`}>
+              {ghResult.message}
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <button
-              onClick={() => {
-                const instructions = `git init\ngit add .\ngit commit -m "feat: complete Synthetic Indices SMC AI workstation"\ngit remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git\ngit branch -M main\ngit push -u origin main`;
-                navigator.clipboard.writeText(instructions);
-                alert("Git push commands copied to clipboard!");
-              }}
-              className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20"
+              onClick={handleGitHubSync}
+              disabled={ghLoading}
+              className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20"
             >
-              <Copy className="h-4 w-4" />
-              Copy Git Commands
+              {ghLoading ? (
+                <div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Code className="h-4 w-4" />
+              )}
+              {ghLoading ? "Syncing & Pushing to GitHub..." : "Sync & Push to GitHub Now"}
             </button>
             <a
               href="https://github.com/new"

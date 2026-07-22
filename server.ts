@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import { syncProjectToGitHub } from "./scripts/github-sync";
 
 dotenv.config();
 
@@ -627,6 +628,41 @@ Use nice SVG tags, text boxes, and charts. Make it extremely visual and beautifu
     res.status(500).json({
       success: false,
       error: error.message || "Failed to compile schematic illustration."
+    });
+  }
+});
+
+// GitHub Auto-Sync API Endpoint
+app.post("/api/github-sync", async (req: express.Request, res: express.Response): Promise<void> => {
+  try {
+    const { token, owner, repo, branch, commitMessage } = req.body;
+
+    const githubToken = token || process.env.GITHUB_TOKEN;
+    const githubOwner = owner || process.env.GITHUB_OWNER;
+    const githubRepo = repo || process.env.GITHUB_REPO;
+
+    if (!githubToken || !githubOwner || !githubRepo) {
+      res.status(400).json({
+        success: false,
+        error: "Missing GitHub credentials. Please provide GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in the request body or environment variables."
+      });
+      return;
+    }
+
+    const result = await syncProjectToGitHub({
+      token: githubToken,
+      owner: githubOwner,
+      repo: githubRepo,
+      branch: branch || "main",
+      commitMessage: commitMessage || "feat: automatic push of AI trading workstation to GitHub repository",
+    });
+
+    res.json(result);
+  } catch (error: any) {
+    console.error("GitHub Sync API Exception:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message || "Failed to push files to GitHub repository."
     });
   }
 });
