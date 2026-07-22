@@ -1,0 +1,144 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. Global Catch-All Security Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Global Helper Functions (Phase 3 primitives)
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isSignedIn() 
+        && request.auth.token.email == 'ibrahimfaruqolamilekan4@gmail.com' 
+        && request.auth.token.email_verified == true;
+    }
+    
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // 3. Trade Specific Validation Helper
+    function isValidTrade(data) {
+      return data.userId is string 
+        && data.userId.size() <= 128
+        && data.userId == request.auth.uid // Enforce identity matching
+        && data.symbol is string 
+        && data.symbol.size() <= 128
+        && data.timeframe is string 
+        && data.timeframe.size() <= 32
+        && data.bias is string 
+        && data.bias.size() <= 32
+        && data.entry_price is number 
+        && data.entry_price >= 0.0
+        && data.stop_loss is number 
+        && data.stop_loss >= 0.0
+        && data.take_profit is number 
+        && data.take_profit >= 0.0
+        && data.risk_reward is string 
+        && data.risk_reward.size() <= 32
+        && data.status is string
+        && (data.status == 'PENDING' || data.status == 'WON' || data.status == 'LOST' || data.status == 'BREAKEAVEN')
+        && (!('exit_price' in data) || data.exit_price == null || data.exit_price is number)
+        && (!('pnl' in data) || data.pnl == null || data.pnl is number)
+        && (data.image_url == null || (data.image_url is string && data.image_url.size() <= 10485760)) // Up to 10MB base64 content
+        && (data.notes == null || (data.notes is string && data.notes.size() <= 50000));
+    }
+
+    // 4. Matches routes for trades
+    match /trades/{tradeId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      
+      // Enforce server timestamp logic for created_at on creation
+      allow create: if isSignedIn() 
+        && isValidId(tradeId)
+        && isValidTrade(incoming()) 
+        && incoming().created_at == request.time
+        && incoming().keys().hasAll(['userId', 'created_at', 'symbol', 'timeframe', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'status']);
+
+      // Enforce immutability of fields on update
+      allow update: if isSignedIn() 
+        && isValidTrade(incoming())
+        && incoming().userId == existing().userId 
+        && incoming().created_at == existing().created_at
+        && (
+          // Action 1: Full Edit (by Owner only)
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAny(['symbol', 'timeframe', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'risk_reward', 'image_url', 'notes', 'status', 'analysis_info', 'exit_price', 'pnl']))
+          ||
+          // Action 2: Update status and exit results only
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAny(['status', 'exit_price', 'pnl']))
+          ||
+          // Action 3: Admin Override
+          isAdmin()
+        );
+
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      // Secure list query constraint
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // 5. Chat History Security Rules
+    function isValidChat(data) {
+      return data.userId is string 
+        && data.userId.size() <= 128
+        && data.userId == request.auth.uid
+        && data.message is string 
+        && data.message.size() <= 50000
+        && data.sender is string 
+        && (data.sender == 'user' || data.sender == 'bot');
+    }
+
+    match /chat_history/{chatId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() 
+        && isValidId(chatId)
+        && isValidChat(incoming())
+        && incoming().created_at == request.time;
+      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 6. User Learnings Security Rules
+    function isValidLearning(data) {
+      return data.userId is string
+        && data.userId.size() <= 128
+        && data.userId == request.auth.uid
+        && data.learnings is string
+        && data.learnings.size() <= 5000
+        && data.category is string
+        && data.category.size() <= 128
+        && (data.symbol == null || (data.symbol is string && data.symbol.size() <= 128));
+    }
+
+    match /user_learnings/{learningId} {
+      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() 
+        && isValidId(learningId)
+        && isValidLearning(incoming())
+        && incoming().created_at == request.time;
+      allow update: if isSignedIn()
+        && isValidLearning(incoming())
+        && incoming().userId == existing().userId
+        && incoming().created_at == existing().created_at;
+      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+    }
+  }
+}

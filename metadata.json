@@ -1,0 +1,6 @@
+{
+  "name": "Synthetic SMC Analytica",
+  "description": "Trading analysis app for Synthetic Indices applying Smart Money Concepts (SMC), Supply/Demand zones, and Fibonacci Retracement on chart uploads, with risk calculators and trade journaling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
