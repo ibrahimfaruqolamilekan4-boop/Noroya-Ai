@@ -15,7 +15,9 @@ import {
   LogIn, 
   LogOut, 
   UserCheck, 
-  Sparkles 
+  Sparkles,
+  Code,
+  ExternalLink
 } from "lucide-react";
 
 export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () => void }) {
@@ -408,6 +410,67 @@ CREATE TABLE IF NOT EXISTS trades (
         <pre className="p-4 bg-slate-950 border border-slate-900 rounded-xl overflow-x-auto text-[11px] font-mono text-slate-300 leading-relaxed max-h-72">
           {sqlSchema}
         </pre>
+      </div>
+
+      {/* GitHub Repository Push & Export Guide */}
+      <div className="bg-[#111827] border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 h-48 w-48 bg-cyan-500/5 blur-[80px] rounded-full pointer-events-none"></div>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-cyan-500/10 border border-cyan-500/20 p-2.5 rounded-xl text-cyan-400">
+            <Code className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold font-display text-slate-100 flex items-center gap-2">
+              GitHub Repository Sync & Commit Guide
+              <span className="text-xs bg-cyan-950 border border-cyan-800 px-2 py-0.5 rounded-full text-cyan-300">
+                Ready to Push
+              </span>
+            </h3>
+            <p className="text-xs text-slate-400">Export your complete AI trading workstation and push to any new GitHub repository</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-xs text-slate-300 leading-relaxed">
+            To push all your current project updates, AI scanner modules, and trading logs to a new GitHub repository, run the following commands in your local terminal or export project files from the AI Studio settings menu:
+          </p>
+
+          <div className="bg-slate-950 border border-slate-900 rounded-xl p-4 font-mono text-xs text-cyan-300 space-y-2">
+            <p className="text-slate-500"># 1. Initialize git repository if not already initialized</p>
+            <p>git init</p>
+            <p className="text-slate-500 pt-1"># 2. Stage all updated files and features</p>
+            <p>git add .</p>
+            <p className="text-slate-500 pt-1"># 3. Commit your changes with a descriptive message</p>
+            <p>git commit -m "feat: complete Synthetic Indices SMC AI workstation and Deriv live integration"</p>
+            <p className="text-slate-500 pt-1"># 4. Link your new GitHub repository and push</p>
+            <p>git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git</p>
+            <p>git branch -M main</p>
+            <p>git push -u origin main</p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <button
+              onClick={() => {
+                const instructions = `git init\ngit add .\ngit commit -m "feat: complete Synthetic Indices SMC AI workstation"\ngit remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git\ngit branch -M main\ngit push -u origin main`;
+                navigator.clipboard.writeText(instructions);
+                alert("Git push commands copied to clipboard!");
+              }}
+              className="px-4 py-2.5 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20"
+            >
+              <Copy className="h-4 w-4" />
+              Copy Git Commands
+            </button>
+            <a
+              href="https://github.com/new"
+              target="_blank"
+              rel="noreferrer"
+              className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-200 font-medium text-xs rounded-xl transition flex items-center gap-2"
+            >
+              <ExternalLink className="h-4 w-4 text-cyan-400" />
+              Create New GitHub Repo
+            </a>
+          </div>
+        </div>
       </div>
     </div>
   );
