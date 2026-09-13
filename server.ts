@@ -135,10 +135,10 @@ app.post("/api/analyze-chart", async (req: express.Request, res: express.Respons
         let base64Data = img;
         let mimeType = "image/png";
         if (img.startsWith("data:")) {
-          const match = img.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-          if (match) {
-            mimeType = match[1];
-            base64Data = match[2];
+          const parts = img.split(";base64,");
+          if (parts.length === 2) {
+            mimeType = parts[0].replace("data:", "");
+            base64Data = parts[1];
           }
         }
         contentParts.push({
@@ -153,10 +153,10 @@ app.post("/api/analyze-chart", async (req: express.Request, res: express.Respons
       let base64Data = image;
       let mimeType = "image/png";
       if (image.startsWith("data:")) {
-        const match = image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-        if (match) {
-          mimeType = match[1];
-          base64Data = match[2];
+        const parts = image.split(";base64,");
+        if (parts.length === 2) {
+          mimeType = parts[0].replace("data:", "");
+          base64Data = parts[1];
         }
       }
       contentParts.push({
@@ -519,10 +519,10 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
       let base64Data = chartImage;
       let mimeType = "image/png";
       if (chartImage.startsWith("data:")) {
-        const match = chartImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-        if (match) {
-          mimeType = match[1];
-          base64Data = match[2];
+        const parts = chartImage.split(";base64,");
+        if (parts.length === 2) {
+          mimeType = parts[0].replace("data:", "");
+          base64Data = parts[1];
         }
       }
       currentParts.push({
