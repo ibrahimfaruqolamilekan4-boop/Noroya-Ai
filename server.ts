@@ -42,14 +42,14 @@ async function generateGeminiContent(
 ): Promise<any> {
   const modelsToTry = [primaryModel];
   
-  if (primaryModel === "gemini-3.7-flash") {
+  if (primaryModel === "gemini-3.8-flash") {
     modelsToTry.push("gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
   } else if (primaryModel === "gemini-3.1-flash-lite") {
-    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-pro-preview");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-pro-preview");
   } else if (primaryModel === "gemini-3.1-pro-preview") {
-    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite");
   } else {
-    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
   }
 
   // Deduplicate model list to maintain clean sequential order
@@ -386,8 +386,8 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
       text: `Analyze the provided chart screenshot(s) for ${symbol} indices under the ${timeframe} timeframe (or multiple top-down timeframes if provided, focusing annotation data on the 30M chart structure) according to Smart Money Concepts (SMC), Supply and Demand, and Fibonacci retracement mechanics. Estimate logical numerical index parameters for the entry, stop-loss, and take-profit targets based on the charts' visible numbers/ranges. If no numbers are available, invent logical relative figures starting around 1000.0 or 10000.0. Only offer a BUY/SELL signal if we have 4+ confluences, otherwise set to WAITING.`,
     };
 
-    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
-      model: "gemini-3.7-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
+      model: "gemini-3.8-flash",
       contents: {
         parts: [...contentParts, textPart]
       },
@@ -536,8 +536,8 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
     currentParts.push({ text: prompt });
     contents.push({ role: "user", parts: currentParts });
 
-    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
-      model: "gemini-3.7-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
+      model: "gemini-3.8-flash",
       contents,
       config: {
         systemInstruction: companionDirective,
@@ -584,8 +584,8 @@ Do NOT write markdown code blocks (\`\`\`xml or \`\`\`svg) in the output. Just r
 Context: ${explanation || "Detailed SMC guide"}.
 Use nice SVG tags, text boxes, and charts. Make it extremely visual and beautiful.`;
 
-    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
-      model: "gemini-3.7-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
+      model: "gemini-3.8-flash",
       contents: svgPromptText,
       config: {
         systemInstruction: svgSystemPrompt,
