@@ -132,13 +132,13 @@ app.post("/api/analyze-chart", async (req: express.Request, res: express.Respons
       // Multiple images provided for top-down multi-timeframe analysis
       for (const img of images) {
         if (!img) continue;
-        let base64Data = img;
+        let base64Data = img.replace(/\s+/g, '');
         let mimeType = "image/png";
         if (img.startsWith("data:")) {
           const parts = img.split(";base64,");
           if (parts.length === 2) {
             mimeType = parts[0].replace("data:", "");
-            base64Data = parts[1];
+            base64Data = parts[1].replace(/\s+/g, '');
           }
         }
         contentParts.push({
@@ -150,13 +150,13 @@ app.post("/api/analyze-chart", async (req: express.Request, res: express.Respons
       }
     } else if (image) {
       // Standard single-image fallback
-      let base64Data = image;
+      let base64Data = image.replace(/\s+/g, '');
       let mimeType = "image/png";
       if (image.startsWith("data:")) {
         const parts = image.split(";base64,");
         if (parts.length === 2) {
           mimeType = parts[0].replace("data:", "");
-          base64Data = parts[1];
+          base64Data = parts[1].replace(/\s+/g, '');
         }
       }
       contentParts.push({
@@ -516,13 +516,13 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
 
     // Attach chart image if loaded
     if (chartImage) {
-      let base64Data = chartImage;
+      let base64Data = chartImage.replace(/\s+/g, '');
       let mimeType = "image/png";
       if (chartImage.startsWith("data:")) {
         const parts = chartImage.split(";base64,");
         if (parts.length === 2) {
           mimeType = parts[0].replace("data:", "");
-          base64Data = parts[1];
+          base64Data = parts[1].replace(/\s+/g, '');
         }
       }
       currentParts.push({
