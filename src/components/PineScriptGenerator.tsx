@@ -214,19 +214,19 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
   };
 
   return (
-    <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="pine-script-workstation-panel">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="pine-script-workstation-panel">
       {/* Light design bar */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-600 via-indigo-500 to-cyan-500"></div>
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4 mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-4">
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] bg-indigo-950/40 border border-indigo-500/25 text-indigo-400 font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider">
               TradingView Indicator Integration
             </span>
           </div>
-          <h3 className="text-md font-bold font-display text-white mt-1 flex items-center gap-2">
+          <h3 className="text-md font-bold font-display text-slate-900 mt-1 flex items-center gap-2">
             <Code className="h-4 w-4 text-indigo-400" />
             SMC Pine Script Indicator Generator
           </h3>
@@ -237,8 +237,8 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
           type="button"
           className={`px-3 py-1.5 text-xs font-bold rounded-lg uppercase tracking-wide cursor-pointer transition-all duration-300 flex items-center gap-1.5 ${
             copied 
-              ? "bg-emerald-600 border border-emerald-500 text-white" 
-              : "bg-[#111827] hover:bg-slate-800 border border-slate-700 text-indigo-200"
+              ? "bg-emerald-600 border border-emerald-500 text-slate-900" 
+              : "bg-white hover:bg-slate-200 border border-slate-300 text-indigo-200"
           }`}
         >
           {copied ? (
@@ -266,14 +266,14 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
                 type="button"
                 className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
                   activePineScript === "smc_core"
-                    ? "bg-indigo-950/25 border-indigo-500/40 text-white shadow-indigo-900/10 shadow-lg"
-                    : "bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                    ? "bg-indigo-950/25 border-indigo-500/40 text-slate-900 shadow-indigo-900/10 shadow-lg"
+                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
                 }`}
               >
                 <Cpu className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "smc_core" ? "text-indigo-400" : "text-slate-500"}`} />
                 <div>
                   <h4 className="text-xs font-bold font-sans">Premium SMC Core</h4>
-                  <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">Detects primary structural breaks, Order Blocks, and Liquidity voids across indices.</p>
+                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Detects primary structural breaks, Order Blocks, and Liquidity voids across indices.</p>
                 </div>
               </button>
 
@@ -282,14 +282,14 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
                 type="button"
                 className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
                   activePineScript === "boom_crash"
-                    ? "bg-pink-950/25 border-pink-500/40 text-white shadow-pink-900/10 shadow-lg"
-                    : "bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                    ? "bg-pink-950/25 border-pink-500/40 text-slate-900 shadow-pink-900/10 shadow-lg"
+                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
                 }`}
               >
                 <Flame className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "boom_crash" ? "text-pink-400" : "text-slate-500"}`} />
                 <div>
                   <h4 className="text-xs font-bold font-sans">Boom & Crash Predictor</h4>
-                  <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">Designed specifically to map sudden spike origins (Vacuum blocks) and calculate retest triggers.</p>
+                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Designed specifically to map sudden spike origins (Vacuum blocks) and calculate retest triggers.</p>
                 </div>
               </button>
 
@@ -298,14 +298,14 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
                 type="button"
                 className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
                   activePineScript === "fib_smc"
-                    ? "bg-emerald-950/25 border-emerald-500/40 text-white shadow-emerald-900/10 shadow-lg"
-                    : "bg-slate-900/40 border-slate-800 text-slate-400 hover:text-slate-200"
+                    ? "bg-emerald-950/25 border-emerald-500/40 text-slate-900 shadow-emerald-900/10 shadow-lg"
+                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
                 }`}
               >
                 <Layers className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "fib_smc" ? "text-emerald-400" : "text-slate-500"}`} />
                 <div>
                   <h4 className="text-xs font-bold font-sans">SMC + CRT + Silver Bullet</h4>
-                  <p className="text-[10px] text-slate-400 leading-relaxed mt-0.5">Integrates HTF Candle Range Theory sweeps, Silver Bullet hourly gaps, Fib Levels, and Order Blocks in a master confluence script.</p>
+                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Integrates HTF Candle Range Theory sweeps, Silver Bullet hourly gaps, Fib Levels, and Order Blocks in a master confluence script.</p>
                 </div>
               </button>
 
@@ -313,13 +313,13 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
           </div>
 
           {/* Quick instructions block */}
-          <div className="p-4 bg-[#0d1527] border border-slate-850 rounded-xl space-y-2 text-xs text-slate-400 font-sans shadow-inner">
+          <div className="p-4 bg-slate-50 border border-slate-850 rounded-xl space-y-2 text-xs text-slate-600 font-sans shadow-inner">
             <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest block font-mono flex items-center gap-1">
               <FileCode className="h-3 w-3" /> TradingView Import Guide
             </span>
             <ol className="space-y-2 list-decimal list-inside text-[11px] leading-relaxed">
-              <li>Click <strong className="text-white">Copy To Clipboard</strong> above.</li>
-              <li>Open any synthetic pair on <strong className="text-white">TradingView</strong>.</li>
+              <li>Click <strong className="text-slate-900">Copy To Clipboard</strong> above.</li>
+              <li>Open any synthetic pair on <strong className="text-slate-900">TradingView</strong>.</li>
               <li>At the bottom panel, open the <strong className="text-indigo-400 font-mono">Pine Editor</strong> tab.</li>
               <li>Select all default template code and overwrite by pasting this script.</li>
               <li>Click <strong className="text-emerald-400">Save</strong>, then click <strong className="text-emerald-400">Add to chart</strong> to overlay SMC live zones.</li>
@@ -334,9 +334,9 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
             <span className="text-cyan-400 animate-pulse">● EDITOR SECURE</span>
           </div>
           
-          <div className="relative bg-[#020617] border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+          <div className="relative bg-[#020617] border border-slate-200 rounded-xl overflow-hidden shadow-2xl">
             {/* Top terminal visual layout bar */}
-            <div className="flex items-center justify-between bg-slate-950 border-b border-slate-900 px-4 py-2.5">
+            <div className="flex items-center justify-between bg-slate-50 border-b border-slate-200 px-4 py-2.5">
               <div className="flex gap-2">
                 <span className="h-2 w-2 rounded-full bg-rose-500"></span>
                 <span className="h-2 w-2 rounded-full bg-amber-500"></span>
@@ -351,7 +351,7 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
               </span>
             </div>
 
-            <pre className="p-4 overflow-x-auto text-[10.5px] font-mono text-slate-300 leading-relaxed max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 bg-[#020617]">
+            <pre className="p-4 overflow-x-auto text-[10.5px] font-mono text-slate-700 leading-relaxed max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 bg-[#020617]">
               <code>{activeScriptCode}</code>
             </pre>
           </div>

@@ -161,3 +161,19 @@ export async function syncProjectToGitHub(options: SyncOptions) {
   console.log(`[GitHub Sync] Successfully pushed ${allFiles.length} files to ${owner}/${repo} (${branch})!`);
   return { success: true, filesCount: allFiles.length, commitSha: newCommit.sha };
 }
+
+// Auto-execute if run directly
+if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('github-sync.ts')) {
+  const token = process.env.GITHUB_TOKEN;
+  const repoUrl = process.env.REPO_URL;
+  if (token && repoUrl) {
+    const parts = repoUrl.replace("https://github.com/", "").split("/");
+    const owner = parts[0];
+    const repo = parts[1]?.replace(".git", "");
+    if (owner && repo) {
+      syncProjectToGitHub({ token, owner, repo }).catch(console.error);
+    }
+  } else {
+    console.log("To run directly: GITHUB_TOKEN=your_token REPO_URL=https://github.com/owner/repo npx tsx scripts/github-sync.ts");
+  }
+}

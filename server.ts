@@ -42,14 +42,14 @@ async function generateGeminiContent(
 ): Promise<any> {
   const modelsToTry = [primaryModel];
   
-  if (primaryModel === "gemini-3.5-flash") {
-    modelsToTry.push("gemini-3.1-flash-lite", "gemini-flash-latest");
+  if (primaryModel === "gemini-3.7-flash") {
+    modelsToTry.push("gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
   } else if (primaryModel === "gemini-3.1-flash-lite") {
-    modelsToTry.push("gemini-3.5-flash", "gemini-flash-latest");
-  } else if (primaryModel === "gemini-flash-latest") {
-    modelsToTry.push("gemini-3.5-flash", "gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-pro-preview");
+  } else if (primaryModel === "gemini-3.1-pro-preview") {
+    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-flash-lite");
   } else {
-    modelsToTry.push("gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest");
+    modelsToTry.push("gemini-3.7-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
   }
 
   // Deduplicate model list to maintain clean sequential order
@@ -118,7 +118,7 @@ app.get("/api/health", (req, res) => {
 // Chart Analysis endpoint
 app.post("/api/analyze-chart", async (req: express.Request, res: express.Response): Promise<void> => {
   try {
-    const { image, images, symbol, timeframe, tradeHistory, learnings } = req.body;
+    const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice } = req.body;
 
     if (!image && (!images || !Array.isArray(images) || images.length === 0)) {
       res.status(400).json({ error: "Missing uploaded chart image parameters." });
@@ -231,6 +231,7 @@ ${lostTrades.slice(0, 5).map((t: any, i: number) => `  * ${t.symbol} Setup at En
     const systemPromptMessage = `You are an elite Synthetic Indices SMC Master Mentor, Computer Vision expert, and full-stack Next.js developer with deep knowledge of Deriv platform. Specialize in master-class analysis of Synthetic Indices and Smart Money Concepts. Specialize also in auto-annotating charts as a Vision system. Specifying precision confluences.
  
 Your task is to analyze the uploaded chart screenshots (which might contain one single chart OR a set of three multi-timeframe charts: 30-minute, 4-hour, and 1-day) of ${symbol || 'Synthetic Index'} and outline an executable trading plan.
+${currentPrice ? `The exact live Deriv market price at the time of this scan is: **${currentPrice}**. Use this precise price to calculate extremely accurate Entry, Stop Loss, and Take Profit levels based on the structures you see.` : ''}
 Look closely at the candle wicks, trend direction, order blocks, vacuums, voids, FVGs, and scale markers on the charts.
 
 ${reinforcementLearningPrompt}
@@ -385,8 +386,8 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
       text: `Analyze the provided chart screenshot(s) for ${symbol} indices under the ${timeframe} timeframe (or multiple top-down timeframes if provided, focusing annotation data on the 30M chart structure) according to Smart Money Concepts (SMC), Supply and Demand, and Fibonacci retracement mechanics. Estimate logical numerical index parameters for the entry, stop-loss, and take-profit targets based on the charts' visible numbers/ranges. If no numbers are available, invent logical relative figures starting around 1000.0 or 10000.0. Only offer a BUY/SELL signal if we have 4+ confluences, otherwise set to WAITING.`,
     };
 
-    const response = await generateGeminiContent(ai, "gemini-3.5-flash", {
-      model: "gemini-3.5-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
+      model: "gemini-3.7-flash",
       contents: {
         parts: [...contentParts, textPart]
       },
@@ -535,8 +536,8 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
     currentParts.push({ text: prompt });
     contents.push({ role: "user", parts: currentParts });
 
-    const response = await generateGeminiContent(ai, "gemini-3.5-flash", {
-      model: "gemini-3.5-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
+      model: "gemini-3.7-flash",
       contents,
       config: {
         systemInstruction: companionDirective,
@@ -583,8 +584,8 @@ Do NOT write markdown code blocks (\`\`\`xml or \`\`\`svg) in the output. Just r
 Context: ${explanation || "Detailed SMC guide"}.
 Use nice SVG tags, text boxes, and charts. Make it extremely visual and beautiful.`;
 
-    const response = await generateGeminiContent(ai, "gemini-3.5-flash", {
-      model: "gemini-3.5-flash",
+    const response = await generateGeminiContent(ai, "gemini-3.7-flash", {
+      model: "gemini-3.7-flash",
       contents: svgPromptText,
       config: {
         systemInstruction: svgSystemPrompt,

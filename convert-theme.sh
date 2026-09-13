@@ -1,0 +1,26 @@
+#!/bin/bash
+find src -type f -name "*.tsx" -o -name "*.ts" -o -name "*.css" | xargs sed -i \
+  -e 's/bg-\[#090d16\]/bg-slate-50/g' \
+  -e 's/bg-\[#0d1322\]/bg-white/g' \
+  -e 's/bg-\[#0b0f19\]/bg-white/g' \
+  -e 's/bg-\[#070b13\]/bg-slate-50/g' \
+  -e 's/bg-\[#111827\]/bg-white/g' \
+  -e 's/bg-\[#1e293b\]/bg-slate-100/g' \
+  -e 's/bg-\[#0a0a0a\]/bg-white/g' \
+  -e 's/bg-\[#0d1527\]/bg-slate-50/g' \
+  -e 's/text-slate-100/text-slate-900/g' \
+  -e 's/text-slate-200/text-slate-800/g' \
+  -e 's/text-slate-300/text-slate-700/g' \
+  -e 's/text-slate-400/text-slate-600/g' \
+  -e 's/text-slate-500/text-slate-500/g' \
+  -e 's/border-slate-800/border-slate-200/g' \
+  -e 's/border-slate-700/border-slate-300/g' \
+  -e 's/border-slate-900/border-slate-200/g' \
+  -e 's/bg-slate-900/bg-slate-100/g' \
+  -e 's/bg-slate-800/bg-slate-200/g' \
+  -e 's/bg-slate-950/bg-slate-50/g' \
+  -e 's/text-white/text-slate-900/g' \
+  -e 's/bg-black/bg-white/g' \
+  -e 's/shadow-cyan-950/shadow-cyan-200/g' \
+  -e 's/shadow-emerald-950/shadow-emerald-200/g' \
+  -e 's/shadow-indigo-950/shadow-indigo-200/g'

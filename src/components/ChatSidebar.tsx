@@ -293,15 +293,15 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#0d1322]/95 border-l border-slate-800/90 w-full relative" id="chat-sidebar-workspace">
+    <div className="flex flex-col h-full bg-white/95 border-l border-slate-200/90 w-full relative" id="chat-sidebar-workspace">
       
       {/* HEADER CONTROLS */}
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80 sticky top-0 z-12">
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 sticky top-0 z-12">
         <div className="flex items-center gap-2">
           <BrainCircuit className="h-5 w-5 text-cyan-400 animate-pulse" />
           <div>
-            <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-display">SMC AI Mentor</h3>
-            <p className="text-[10px] text-slate-400">Contextual Trading Companion</p>
+            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider font-display">SMC AI Mentor</h3>
+            <p className="text-[10px] text-slate-600">Contextual Trading Companion</p>
           </div>
         </div>
 
@@ -309,7 +309,7 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
           {onClose && (
             <button 
               onClick={onClose} 
-              className="lg:hidden p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-900 transition cursor-pointer"
+              className="lg:hidden p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -318,13 +318,13 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
       </div>
 
       {/* TABS NAVIGATION */}
-      <div className="grid grid-cols-2 bg-slate-950 border-b border-slate-850 text-xs">
+      <div className="grid grid-cols-2 bg-slate-50 border-b border-slate-850 text-xs">
         <button
           onClick={() => setActiveTab("chat")}
           className={`py-3 text-center font-bold tracking-wider transition border-b-2 cursor-pointer uppercase ${
             activeTab === "chat" 
               ? "text-cyan-400 border-cyan-500 bg-cyan-950/10" 
-              : "text-slate-500 border-transparent hover:text-slate-300"
+              : "text-slate-500 border-transparent hover:text-slate-700"
           }`}
         >
           AI Chat Room
@@ -334,7 +334,7 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
           className={`py-3 text-center font-bold tracking-wider transition border-b-2 cursor-pointer uppercase ${
             activeTab === "learnings" 
               ? "text-indigo-400 border-indigo-505 bg-indigo-950/10" 
-              : "text-slate-500 border-transparent hover:text-slate-300"
+              : "text-slate-500 border-transparent hover:text-slate-700"
           }`}
         >
           My SMC Rules Setup ({learnings.length})
@@ -349,9 +349,9 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
           <div className="space-y-4 flex flex-col justify-end min-h-full">
             
             {/* Top widgets controls: Quiz shortcuts & Educational toggler */}
-            <div className="bg-[#111827] border border-slate-800 p-3.5 rounded-xl space-y-3">
+            <div className="bg-white border border-slate-200 p-3.5 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
                   <GraduationCap className="h-4 w-4 text-indigo-400" />
                   <span>Educational Quizzer</span>
                 </div>
@@ -364,8 +364,8 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                     onChange={() => setEducationalMode(!educationalMode)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-slate-800 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-cyan-400"></div>
-                  <span className="ml-2 text-[10px] text-slate-400 uppercase font-mono">
+                  <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-cyan-400"></div>
+                  <span className="ml-2 text-[10px] text-slate-600 uppercase font-mono">
                     {educationalMode ? "Study ON" : "Tactical ON"}
                   </span>
                 </label>
@@ -375,19 +375,19 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   <button
                     onClick={() => handleSendMessage(undefined, "Quiz me about Boom / Crash indices spike mitigation")}
-                    className="p-1 px-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-[10px] text-indigo-300 font-bold rounded-full transition cursor-pointer"
+                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-indigo-300 font-bold rounded-full transition cursor-pointer"
                   >
                     ⚡ Take SMC Spike Quiz
                   </button>
                   <button
                     onClick={() => handleSendMessage(undefined, "Explain what a Fair Value Gap (FVG) represents")}
-                    className="p-1 px-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-[10px] text-cyan-300 font-bold rounded-full transition cursor-pointer"
+                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-cyan-300 font-bold rounded-full transition cursor-pointer"
                   >
                     📖 Explain FVG
                   </button>
                   <button
                     onClick={() => handleSendMessage(undefined, "Explain the exact structural difference between BOS and CHoCH")}
-                    className="p-1 px-2.5 bg-slate-900 border border-slate-850 hover:bg-slate-800 text-[10px] text-amber-400 font-bold rounded-full transition cursor-pointer"
+                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-amber-400 font-bold rounded-full transition cursor-pointer"
                   >
                     ❓ BOS vs CHoCH differences
                   </button>
@@ -411,8 +411,8 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
 
                     <div className={`p-3.5 rounded-2xl text-[12px] leading-relaxed relative ${
                       isBot 
-                        ? "bg-[#111827] border border-slate-800 text-slate-200" 
-                        : "bg-indigo-600 text-white rounded-br-none glow-indigo-sm"
+                        ? "bg-white border border-slate-200 text-slate-800" 
+                        : "bg-indigo-600 text-slate-900 rounded-br-none glow-indigo-sm"
                     }`}
                       style={{ whiteSpace: "pre-wrap" }}
                     >
@@ -423,15 +423,15 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                         <div className="mt-2.5">
                           <div 
                             onClick={() => setImageModalUrl(imageModalUrl)}
-                            className="bg-slate-950 aspect-[8/5] w-full rounded-xl overflow-hidden border border-slate-800 cursor-pointer hover:border-cyan-400/50 transition relative group"
+                            className="bg-slate-50 aspect-[8/5] w-full rounded-xl overflow-hidden border border-slate-200 cursor-pointer hover:border-cyan-400/50 transition relative group"
                           >
                             <img 
                               src={imageModalUrl} 
                               alt="Educational concept visual chart" 
                               className="w-full h-full object-cover transition group-hover:scale-101"
                             />
-                            <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                              <span className="text-[10px] text-white bg-slate-950/80 p-2 rounded-lg border border-slate-800 font-bold uppercase tracking-widest flex items-center gap-1">
+                            <div className="absolute inset-0 bg-slate-50/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                              <span className="text-[10px] text-slate-900 bg-slate-50/80 p-2 rounded-lg border border-slate-200 font-bold uppercase tracking-widest flex items-center gap-1">
                                 <PlusCircle className="h-3.5 w-3.5" /> Zoom View
                               </span>
                             </div>
@@ -446,7 +446,7 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               {isSending && (
                 <div className="flex flex-col max-w-[85%] self-start mr-auto">
                   <span className="text-[9px] text-slate-500 font-mono mb-1">AI Copilot</span>
-                  <div className="bg-[#111827] border border-slate-850 p-3.5 rounded-2xl flex items-center gap-2 text-slate-400 text-xs">
+                  <div className="bg-white border border-slate-850 p-3.5 rounded-2xl flex items-center gap-2 text-slate-600 text-xs">
                     <Loader2 className="h-4.5 w-4.5 text-indigo-500 animate-spin" />
                     Calculating trade matrices...
                   </div>
@@ -463,22 +463,22 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
           <div className="space-y-4">
             
             {/* Saved learning capturing panel */}
-            <div className="bg-[#111827] border border-slate-800 p-4 rounded-xl">
-              <h4 className="text-xs font-bold text-white uppercase tracking-widest font-display mb-1 flex items-center gap-1.5">
+            <div className="bg-white border border-slate-200 p-4 rounded-xl">
+              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-display mb-1 flex items-center gap-1.5">
                 <PlusCircle className="h-4 w-4 text-emerald-400" />
                 Capture Trading Custom Rule
               </h4>
-              <p className="text-[10px] text-slate-400 mb-3 leading-normal">
+              <p className="text-[10px] text-slate-600 mb-3 leading-normal">
                 Instruct your AI to remember specific volatility indexes tendencies (e.g. V75 sweeps wicks, C500 spike ratios) so it integrates them into its on-screen SMC analysis.
               </p>
 
               <form onSubmit={handleCreateLearning} className="space-y-3">
                 <div>
-                  <label className="block text-[9px] text-slate-400 uppercase font-mono mb-1">Related Index Context</label>
+                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Related Index Context</label>
                   <select 
                     value={learningSymbol} 
                     onChange={(e) => setLearningSymbol(e.target.value)}
-                    className="w-full text-xs p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="V75">Volatility 75 Index</option>
                     <option value="V751S">Volatility 75 (1s)</option>
@@ -491,11 +491,11 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                 </div>
 
                 <div>
-                  <label className="block text-[9px] text-slate-400 uppercase font-mono mb-1">Learning Category</label>
+                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Learning Category</label>
                   <select 
                     value={learningCategory} 
                     onChange={(e) => setLearningCategory(e.target.value)}
-                    className="w-full text-xs p-2 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
                   >
                     <option value="Wicks/Liquidity">Liq/Wick Sweeps</option>
                     <option value="Spikes">Boom/Crash Spikes</option>
@@ -505,21 +505,21 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                 </div>
 
                 <div>
-                  <label className="block text-[9px] text-slate-400 uppercase font-mono mb-1">Observation / Golden Rule</label>
+                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Observation / Golden Rule</label>
                   <textarea
                     rows={3}
                     placeholder="e.g., V75 often performs a premium 61.8% Fibonacci retrace before filling daily imbalances."
                     value={learningText}
                     onChange={(e) => setLearningText(e.target.value)}
                     maxLength={300}
-                    className="w-full text-xs p-2.5 bg-slate-900 border border-slate-800 rounded-lg text-slate-200 focus:outline-none focus:border-indigo-500 placeholder-slate-600 block resize-none"
+                    className="w-full text-xs p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500 placeholder-slate-600 block resize-none"
                   ></textarea>
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSavingLearning || !learningText.trim()}
-                  className="w-full text-xs font-bold py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-550 border border-indigo-500 text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:bg-slate-900 disabled:border-slate-850 disabled:text-slate-500"
+                  className="w-full text-xs font-bold py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-550 border border-indigo-500 text-slate-900 flex items-center justify-center gap-1.5 cursor-pointer disabled:bg-slate-100 disabled:border-slate-850 disabled:text-slate-500"
                 >
                   {isSavingLearning ? (
                     <>
@@ -549,12 +549,12 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               ) : (
                 <div className="space-y-2.5">
                   {learnings.map((l) => (
-                    <div key={l.id} className="p-3 bg-slate-950 border border-slate-850 rounded-xl space-y-1.5">
+                    <div key={l.id} className="p-3 bg-slate-50 border border-slate-850 rounded-xl space-y-1.5">
                       <div className="flex justify-between items-center text-[9px] font-mono">
                         <span className="text-indigo-400 font-bold uppercase">{l.category}</span>
                         <span className="text-slate-500">{l.symbol}</span>
                       </div>
-                      <p className="text-xs text-slate-300 leading-normal">{l.learnings}</p>
+                      <p className="text-xs text-slate-700 leading-normal">{l.learnings}</p>
                     </div>
                   ))}
                 </div>
@@ -568,16 +568,16 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
 
       {/* FOOTER MESSAGE WRAPPING INPUTS BLOCK */}
       {activeTab === "chat" && (
-        <div className="p-4 border-t border-slate-800 bg-slate-950/90 space-y-3 sticky bottom-0 left-0 right-0 z-10 select-none">
+        <div className="p-4 border-t border-slate-200 bg-slate-50/90 space-y-3 sticky bottom-0 left-0 right-0 z-10 select-none">
           
           {/* Diagnostic utilities: diagram builder */}
-          <div className="bg-slate-900 border border-slate-850 p-2 rounded-xl flex items-center justify-between gap-3 text-xs">
+          <div className="bg-slate-100 border border-slate-850 p-2 rounded-xl flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-1">
               <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
               <select
                 value={diagramSubject}
                 onChange={(e) => setDiagramSubject(e.target.value)}
-                className="bg-transparent border-none text-[10px] text-slate-300 font-bold focus:outline-none cursor-pointer max-w-[150px] shrink-0"
+                className="bg-transparent border-none text-[10px] text-slate-700 font-bold focus:outline-none cursor-pointer max-w-[150px] shrink-0"
               >
                 <option value="Bullish Order Block Shift">Bullish OB Shift</option>
                 <option value="Bearish Liquidity Wick sweep">Wick Sweep</option>
@@ -591,8 +591,8 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               disabled={isGeneratingDiagram}
               className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1 shrink-0 ${
                 isGeneratingDiagram 
-                  ? "bg-slate-950 border-slate-800 text-slate-500 cursor-not-allowed" 
-                  : "bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-400 hover:text-white transition cursor-pointer"
+                  ? "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed" 
+                  : "bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-400 hover:text-slate-900 transition cursor-pointer"
               }`}
             >
               {isGeneratingDiagram ? (
@@ -617,12 +617,12 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={isSending}
-              className="flex-1 bg-slate-900 border border-slate-805 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-slate-100 border border-slate-805 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
             />
             <button
               type="submit"
               disabled={!inputText.trim() || isSending}
-              className="p-2.5 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500 text-white rounded-xl transition cursor-pointer shadow-md shadow-indigo-500/10 select-none flex items-center justify-center min-w-[38px] disabled:opacity-40"
+              className="p-2.5 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500 text-slate-900 rounded-xl transition cursor-pointer shadow-md shadow-indigo-500/10 select-none flex items-center justify-center min-w-[38px] disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -644,14 +644,14 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
       {/* DYNAMIC ZOOM DIALOG MODAL */}
       {imageModalUrl && (
         <div 
-          className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex items-center justify-center p-4 selection:bg-transparent"
+          className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-md flex items-center justify-center p-4 selection:bg-transparent"
           onClick={() => setImageModalUrl(null)}
         >
-          <div className="relative max-w-4xl w-full max-h-[85vh] bg-[#0c0f17] border border-slate-800 rounded-3xl overflow-hidden shadow-2xl p-4 flex flex-col items-center">
+          <div className="relative max-w-4xl w-full max-h-[85vh] bg-[#0c0f17] border border-slate-200 rounded-3xl overflow-hidden shadow-2xl p-4 flex flex-col items-center">
             
             <button 
               onClick={() => setImageModalUrl(null)}
-              className="absolute top-4 right-4 bg-slate-900 hover:bg-[#111827] text-slate-400 hover:text-white p-2 rounded-xl transition cursor-pointer z-10"
+              className="absolute top-4 right-4 bg-slate-100 hover:bg-white text-slate-600 hover:text-slate-900 p-2 rounded-xl transition cursor-pointer z-10"
             >
               <X className="h-5 w-5" />
             </button>
@@ -660,13 +660,13 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               <img 
                 src={imageModalUrl} 
                 alt="Enlarged study schematic model" 
-                className="max-w-full max-h-[70vh] object-contain rounded-2xl border border-slate-900 selection:bg-transparent"
+                className="max-w-full max-h-[70vh] object-contain rounded-2xl border border-slate-200 selection:bg-transparent"
               />
             </div>
 
             <div className="pt-4 text-center">
-              <span className="text-xs font-bold text-white uppercase tracking-wider font-display">SMC Mechanical Diagram</span>
-              <p className="text-[10px] text-slate-400 mt-1">Study mitigation levels, stop-losses, and premium/discount order lines contextually.</p>
+              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider font-display">SMC Mechanical Diagram</span>
+              <p className="text-[10px] text-slate-600 mt-1">Study mitigation levels, stop-losses, and premium/discount order lines contextually.</p>
             </div>
 
           </div>

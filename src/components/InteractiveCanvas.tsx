@@ -51,7 +51,7 @@ export default function InteractiveCanvas({
   const canvasHeight = 490;
 
   // Tools & custom choices
-  const [activeTool, setActiveTool] = useState<"free" | "rect" | "line" | "arrow" | "text" | "eraser" | "none">("none");
+  const [activeTool, setActiveTool] = useState<"free" | "rect" | "line" | "trendline" | "arrow" | "text" | "eraser" | "none">("none");
   const [color, setColor] = useState<string>("#22d3ee"); // Default cyan accent
   const [opacity, setOpacity] = useState<number>(0.8);
   const [brushSize, setBrushSize] = useState<number>(3);
@@ -323,12 +323,13 @@ export default function InteractiveCanvas({
           hasControls: true,
         });
         canvas.add(tempObject);
-      } else if (activeTool === "arrow") {
+      } else if (activeTool === "arrow" || activeTool === "trendline") {
         // Line body
         tempObject = new fabric.Line([pointer.x, pointer.y, pointer.x, pointer.y], {
           stroke: color,
           strokeWidth: brushSize,
           selectable: true,
+          hasControls: true, // Need controls for trendlines
         });
         canvas.add(tempObject);
       } else if (activeTool === "text") {
@@ -365,9 +366,9 @@ export default function InteractiveCanvas({
           left: width < 0 ? pointer.x : startPoint.x,
           top: height < 0 ? pointer.y : startPoint.y,
         });
-      } else if (activeTool === "arrow") {
-        const arrow = tempObject as fabric.Line;
-        arrow.set({ x2: pointer.x, y2: pointer.y });
+      } else if (activeTool === "arrow" || activeTool === "trendline") {
+        const line = tempObject as fabric.Line;
+        line.set({ x2: pointer.x, y2: pointer.y });
       }
 
       canvas.renderAll();
@@ -1558,7 +1559,7 @@ export default function InteractiveCanvas({
     <div className="space-y-6" id="supreme-interactive-charting-suite">
       
       {/* 1. CYBERPUNK TOOLBAR CONTROLS HEADER */}
-      <div className="bg-gradient-to-b from-[#0f172a] to-[#090d16] border border-slate-800 p-4 rounded-2xl space-y-4 shadow-xl">
+      <div className="bg-gradient-to-b from-[#0f172a] to-[#090d16] border border-slate-200 p-4 rounded-2xl space-y-4 shadow-xl">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1567,7 +1568,7 @@ export default function InteractiveCanvas({
                 <Sliders className="h-4 w-4" /> Vector Stylus & SMC Drawing Deck
               </h4>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-600">
               Drag interactive lines, draw demand zones, or overlay Fibonacci retracement levels onto the chart background.
             </p>
           </div>
@@ -1610,14 +1611,14 @@ export default function InteractiveCanvas({
         </div>
 
         {/* BRUSH & TOOL SELECTION */}
-        <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-900">
+        <div className="flex flex-wrap items-center gap-4 pt-3 border-t border-slate-200">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => setActiveTool("free")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "free"
                   ? "bg-cyan-500 text-slate-950 px-3.5 font-extrabold shadow-md shadow-cyan-500/20"
-                  : "bg-slate-950 border border-slate-850 text-slate-300 hover:text-white"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
               }`}
               title="Pencil Free Draw"
             >
@@ -1629,8 +1630,8 @@ export default function InteractiveCanvas({
               onClick={() => setActiveTool("rect")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "rect"
-                  ? "bg-indigo-600 text-white px-3.5 font-extrabold shadow-md shadow-indigo-600/25"
-                  : "bg-slate-950 border border-slate-850 text-slate-300 hover:text-white"
+                  ? "bg-indigo-600 text-slate-900 px-3.5 font-extrabold shadow-md shadow-indigo-600/25"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
               }`}
               title="Draw Order Block Rectangles"
             >
@@ -1642,8 +1643,8 @@ export default function InteractiveCanvas({
               onClick={() => setActiveTool("line")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "line"
-                  ? "bg-sky-600 text-white px-3.5 font-extrabold shadow-md shadow-sky-600/25"
-                  : "bg-slate-950 border border-slate-850 text-slate-300 hover:text-white"
+                  ? "bg-sky-600 text-slate-900 px-3.5 font-extrabold shadow-md shadow-sky-600/25"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
               }`}
               title="Draw infinite horizontal level lines"
             >
@@ -1652,11 +1653,24 @@ export default function InteractiveCanvas({
             </button>
 
             <button
+              onClick={() => setActiveTool("trendline")}
+              className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
+                activeTool === "trendline"
+                  ? "bg-purple-500 text-slate-950 px-3.5 font-extrabold shadow-md shadow-purple-500/25"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
+              }`}
+              title="Draw custom trendlines"
+            >
+              <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+              <span>Trendline</span>
+            </button>
+
+            <button
               onClick={() => setActiveTool("arrow")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "arrow"
                   ? "bg-amber-500 text-slate-950 px-3.5 font-extrabold shadow-md shadow-amber-500/25"
-                  : "bg-slate-950 border border-slate-850 text-slate-300 hover:text-white"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
               }`}
               title="Draw bias arrow structures"
             >
@@ -1668,8 +1682,8 @@ export default function InteractiveCanvas({
               onClick={() => setActiveTool("text")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "text"
-                  ? "bg-fuchsia-600 text-white px-3.5 font-extrabold shadow-md shadow-fuchsia-600/25"
-                  : "bg-slate-950 border border-slate-850 text-slate-400 hover:text-white"
+                  ? "bg-fuchsia-600 text-slate-900 px-3.5 font-extrabold shadow-md shadow-fuchsia-600/25"
+                  : "bg-slate-50 border border-slate-850 text-slate-600 hover:text-slate-900"
               }`}
               title="Write labels on canvas"
             >
@@ -1681,8 +1695,8 @@ export default function InteractiveCanvas({
               onClick={() => setActiveTool("eraser")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
                 activeTool === "eraser"
-                  ? "bg-rose-600 text-white px-3.5 font-extrabold shadow-md shadow-rose-600/25"
-                  : "bg-slate-950 border border-slate-850 text-slate-400 hover:text-white"
+                  ? "bg-rose-600 text-slate-900 px-3.5 font-extrabold shadow-md shadow-rose-600/25"
+                  : "bg-slate-50 border border-slate-850 text-slate-600 hover:text-slate-900"
               }`}
               title="Eraser (Click any drawn element to delete)"
             >
@@ -1694,8 +1708,8 @@ export default function InteractiveCanvas({
               onClick={() => setActiveTool("none")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
                 activeTool === "none"
-                  ? "bg-slate-800 text-white px-3.5"
-                  : "bg-slate-950 border border-slate-850 text-slate-450 hover:text-white"
+                  ? "bg-slate-200 text-slate-900 px-3.5"
+                  : "bg-slate-50 border border-slate-850 text-slate-450 hover:text-slate-900"
               }`}
               title="Select, resize, or drag elements"
             >
@@ -1716,7 +1730,7 @@ export default function InteractiveCanvas({
                     type="button"
                     onClick={() => setColor(c)}
                     className={`h-5 w-5 rounded-full border transition-transform cursor-pointer ${
-                      color === c ? "scale-125 border-white ring-2 ring-indigo-500/50" : "border-slate-900 hover:scale-105"
+                      color === c ? "scale-125 border-white ring-2 ring-indigo-500/50" : "border-slate-200 hover:scale-105"
                     }`}
                     style={{ backgroundColor: c }}
                   />
@@ -1733,9 +1747,9 @@ export default function InteractiveCanvas({
                 step="0.1"
                 value={opacity}
                 onChange={(e) => setOpacity(parseFloat(e.target.value))}
-                className="w-16 accent-indigo-500 h-1 bg-slate-800"
+                className="w-16 accent-indigo-500 h-1 bg-slate-200"
               />
-              <span className="text-[10px] text-slate-400 font-mono">{(opacity * 100).toFixed(0)}%</span>
+              <span className="text-[10px] text-slate-600 font-mono">{(opacity * 100).toFixed(0)}%</span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -1747,9 +1761,9 @@ export default function InteractiveCanvas({
                 step="1"
                 value={brushSize}
                 onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                className="w-16 accent-indigo-500 h-1 bg-slate-800"
+                className="w-16 accent-indigo-500 h-1 bg-slate-200"
               />
-              <span className="text-[10px] text-slate-400 font-mono">{brushSize}px</span>
+              <span className="text-[10px] text-slate-600 font-mono">{brushSize}px</span>
             </div>
           </div>
 
@@ -1757,7 +1771,7 @@ export default function InteractiveCanvas({
           <div className="flex items-center gap-1.5 border-l border-slate-950 pl-3 ml-auto text-xs">
             <button
               onClick={handleUndo}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-850 hover:bg-slate-900 text-slate-350 cursor-pointer flex items-center gap-1 transition text-xs font-semibold"
+              className="p-2 rounded-xl bg-slate-50 border border-slate-850 hover:bg-slate-100 text-slate-350 cursor-pointer flex items-center gap-1 transition text-xs font-semibold"
               title="Undo last change"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -1769,8 +1783,8 @@ export default function InteractiveCanvas({
               disabled={redoStack.length === 0}
               className={`p-2 rounded-xl border flex items-center gap-1 transition text-xs font-semibold cursor-pointer ${
                 redoStack.length === 0
-                  ? "bg-slate-950/40 border-slate-900 text-slate-600 cursor-not-allowed"
-                  : "bg-slate-950 border-slate-850 hover:bg-slate-900 text-slate-350"
+                  ? "bg-slate-50/40 border-slate-200 text-slate-600 cursor-not-allowed"
+                  : "bg-slate-50 border-slate-850 hover:bg-slate-100 text-slate-350"
               }`}
               title="Redo last change"
             >
@@ -1788,7 +1802,7 @@ export default function InteractiveCanvas({
 
             <button
               onClick={handleClearAll}
-              className="p-2 rounded-xl bg-slate-950 border border-slate-850 hover:bg-red-950/25 text-slate-400 hover:text-red-400 cursor-pointer flex items-center gap-1 transition text-xs font-semibold"
+              className="p-2 rounded-xl bg-slate-50 border border-slate-850 hover:bg-red-950/25 text-slate-600 hover:text-red-400 cursor-pointer flex items-center gap-1 transition text-xs font-semibold"
               title="Wipe whole workspace"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -1805,15 +1819,15 @@ export default function InteractiveCanvas({
         <div className="xl:col-span-3 space-y-3">
           <div 
             ref={containerRef}
-            className="flex bg-[#070b13] border border-slate-850 rounded-2xl overflow-hidden shadow-2xl relative select-none"
+            className="flex bg-slate-50 border border-slate-850 rounded-2xl overflow-hidden shadow-2xl relative select-none"
             style={{ minHeight: "490px" }}
           >
             {/* Overlay loading mask */}
             {!imageLoaded && (
-              <div className="absolute inset-0 bg-slate-950/90 z-20 flex flex-col items-center justify-center p-8 text-center space-y-3">
+              <div className="absolute inset-0 bg-slate-50/90 z-20 flex flex-col items-center justify-center p-8 text-center space-y-3">
                 <div className="h-8 w-8 border-3 border-cyan-400 border-t-transparent rounded-full animate-spin"></div>
                 <div className="space-y-1">
-                  <p className="text-xs text-slate-200 font-bold uppercase tracking-widest font-mono">
+                  <p className="text-xs text-slate-800 font-bold uppercase tracking-widest font-mono">
                     Compiling Fabric Layer matrices...
                   </p>
                   <p className="text-[10px] text-slate-500 font-mono">ASSEMBLING HIGH-PRECISION TICK TRACKER</p>
@@ -1823,8 +1837,8 @@ export default function InteractiveCanvas({
 
             {/* FLOATING R:R HUD OVERLAY ON CANVAS (Updates in real-time) */}
             {entryPrice && stopLossPrice && (tp1Price || tp2Price) && (
-              <div id="floating-rr-hud-canvas" className="absolute top-4 left-4 z-10 bg-slate-950/85 backdrop-blur-md border border-cyan-500/35 p-3 rounded-xl shadow-lg shadow-black/80 font-mono text-[10.5px] space-y-1 text-slate-300 min-w-[140px] pointer-events-none transition-all select-none">
-                <div className="flex items-center gap-1.5 border-b border-slate-800 pb-1 mb-1">
+              <div id="floating-rr-hud-canvas" className="absolute top-4 left-4 z-10 bg-slate-50/85 backdrop-blur-md border border-cyan-500/35 p-3 rounded-xl shadow-lg shadow-black/80 font-mono text-[10.5px] space-y-1 text-slate-700 min-w-[140px] pointer-events-none transition-all select-none">
+                <div className="flex items-center gap-1.5 border-b border-slate-200 pb-1 mb-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
                   <span className="font-bold text-[#22d3ee] uppercase tracking-wider text-[9px]">SMC Live Ratio</span>
                 </div>
@@ -1844,7 +1858,7 @@ export default function InteractiveCanvas({
                     </span>
                   </div>
                 ) : null}
-                <div className="pt-1 mt-1 border-t border-slate-800 flex justify-between text-[9px] text-slate-500">
+                <div className="pt-1 mt-1 border-t border-slate-200 flex justify-between text-[9px] text-slate-500">
                   <span>Risk Offset:</span>
                   <span className="text-rose-400 font-bold">{Math.abs(entryPrice - stopLossPrice).toFixed(1)} pts</span>
                 </div>
@@ -1855,7 +1869,7 @@ export default function InteractiveCanvas({
             <div className="flex-grow overflow-x-auto scrollbar-thin outline-none relative">
               <canvas
                 ref={canvasRef}
-                className="select-none block touch-none outline-none mx-auto bg-[#0d1322]"
+                className="select-none block touch-none outline-none mx-auto bg-white"
               />
             </div>
 
@@ -1864,7 +1878,7 @@ export default function InteractiveCanvas({
               className="w-24 bg-[#0a0d14] border-l border-slate-850 flex flex-col justify-start relative text-[9px] font-mono select-none" 
               style={{ height: `${canvasHeight}px` }}
             >
-              <div className="absolute inset-x-0 top-1 text-center text-[#22d3ee] font-sans font-bold border-b border-slate-900 pb-1 text-[8px] uppercase tracking-wider">
+              <div className="absolute inset-x-0 top-1 text-center text-[#22d3ee] font-sans font-bold border-b border-slate-200 pb-1 text-[8px] uppercase tracking-wider">
                 Index Scale
               </div>
 
@@ -1876,10 +1890,10 @@ export default function InteractiveCanvas({
                 return (
                   <div 
                     key={idx} 
-                    className="absolute left-0 right-0 border-t border-slate-900/40 text-slate-500 pl-2 pointer-events-none text-left" 
+                    className="absolute left-0 right-0 border-t border-slate-200/40 text-slate-500 pl-2 pointer-events-none text-left" 
                     style={{ top: `${topPct}%` }}
                   >
-                    <span className="relative -top-2 bg-[#0a0d14]/85 px-1 rounded text-[8.5px] leading-none text-slate-400 font-mono font-medium">
+                    <span className="relative -top-2 bg-[#0a0d14]/85 px-1 rounded text-[8.5px] leading-none text-slate-600 font-mono font-medium">
                       {price.toFixed(1)}
                     </span>
                   </div>
@@ -1901,7 +1915,7 @@ export default function InteractiveCanvas({
                       className="absolute left-0 right-0 flex items-center h-4 transition-all"
                       style={{ top: `calc(${topPct}% - 8px)` }}
                     >
-                      <div className="w-1.5 h-1.5 bg-[#0a0d14] border-t border-l border-slate-700 rotate-45 -mr-1 z-10"></div>
+                      <div className="w-1.5 h-1.5 bg-[#0a0d14] border-t border-l border-slate-300 rotate-45 -mr-1 z-10"></div>
                       <div className={`px-1 rounded font-mono font-bold border text-[7.5px] leading-relaxed shrink-0 w-full text-center ${tick.color}`}>
                         {tick.label}: {tick.price.toFixed(0)}
                       </div>
@@ -1913,7 +1927,7 @@ export default function InteractiveCanvas({
             </div>
           </div>
 
-          <div className="bg-slate-950/80 border border-slate-900 px-4 py-2.5 rounded-xl flex items-center justify-between text-[11px] text-slate-400">
+          <div className="bg-slate-50/80 border border-slate-200 px-4 py-2.5 rounded-xl flex items-center justify-between text-[11px] text-slate-600">
             <span className="flex items-center gap-1.5 text-[10px] font-mono tracking-wider">
               <Grid className="h-3.5 w-3.5 text-indigo-400" /> RESIZE VIEWPORT REFERENCE TO: {canvasWidth}x{canvasHeight}px
             </span>
@@ -1925,12 +1939,12 @@ export default function InteractiveCanvas({
 
         {/* 3. PARAMS & COMMIT CARD CENTER (Col: 1/4) */}
         <div className="xl:col-span-1 space-y-4">
-          <div className="bg-gradient-to-b from-[#0f172a] to-[#090d16] border border-slate-800 p-5 rounded-2xl space-y-4 shadow-xl">
-            <div className="border-b border-slate-900 pb-3">
+          <div className="bg-gradient-to-b from-[#0f172a] to-[#090d16] border border-slate-200 p-5 rounded-2xl space-y-4 shadow-xl">
+            <div className="border-b border-slate-200 pb-3">
               <h4 className="text-xs font-black uppercase text-[#22d3ee] tracking-widest font-mono flex items-center gap-1.5">
                 <Activity className="h-4 w-4" /> Position Tuner
               </h4>
-              <p className="text-[10px] text-slate-400 mt-1">Manual overrides sync instantly to the canvas.</p>
+              <p className="text-[10px] text-slate-600 mt-1">Manual overrides sync instantly to the canvas.</p>
             </div>
 
             {/* Inputs list */}
@@ -1944,7 +1958,7 @@ export default function InteractiveCanvas({
                     type="number"
                     value={entryPrice}
                     onChange={(e) => setEntryPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full text-xs p-2.5 pl-8 bg-slate-950 border border-slate-850 rounded-lg text-slate-100 font-mono font-bold focus:outline-none focus:border-cyan-500"
+                    className="w-full text-xs p-2.5 pl-8 bg-slate-50 border border-slate-850 rounded-lg text-slate-900 font-mono font-bold focus:outline-none focus:border-cyan-500"
                   />
                   <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-cyan-400"></div>
                 </div>
@@ -1959,7 +1973,7 @@ export default function InteractiveCanvas({
                     type="number"
                     value={stopLossPrice}
                     onChange={(e) => setStopLossPrice(parseFloat(e.target.value) || 0)}
-                    className="w-full text-xs p-2.5 pl-8 bg-slate-950 border border-slate-850 rounded-lg text-rose-200 font-mono font-bold focus:outline-none focus:border-rose-500"
+                    className="w-full text-xs p-2.5 pl-8 bg-slate-50 border border-slate-850 rounded-lg text-rose-200 font-mono font-bold focus:outline-none focus:border-rose-500"
                   />
                   <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-rose-400"></div>
                 </div>
@@ -1974,7 +1988,7 @@ export default function InteractiveCanvas({
                     type="number"
                     value={tp1Price}
                     onChange={(e) => setTp1Price(parseFloat(e.target.value) || 0)}
-                    className="w-full text-xs p-2.5 pl-8 bg-slate-950 border border-slate-850 rounded-lg text-emerald-200 font-mono font-bold focus:outline-none focus:border-emerald-500"
+                    className="w-full text-xs p-2.5 pl-8 bg-slate-50 border border-slate-850 rounded-lg text-emerald-200 font-mono font-bold focus:outline-none focus:border-emerald-500"
                   />
                   <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-emerald-400"></div>
                 </div>
@@ -1989,7 +2003,7 @@ export default function InteractiveCanvas({
                     type="number"
                     value={tp2Price}
                     onChange={(e) => setTp2Price(parseFloat(e.target.value) || 0)}
-                    className="w-full text-xs p-2.5 pl-8 bg-slate-950 border border-slate-850 rounded-lg text-teal-100 font-mono font-bold focus:outline-none focus:border-teal-500"
+                    className="w-full text-xs p-2.5 pl-8 bg-slate-50 border border-slate-850 rounded-lg text-teal-100 font-mono font-bold focus:outline-none focus:border-teal-500"
                   />
                   <div className="absolute left-2.5 top-3 w-1.5 h-1.5 rounded-full bg-teal-300"></div>
                 </div>
@@ -1998,18 +2012,18 @@ export default function InteractiveCanvas({
 
             {/* Risk reward calculator display */}
             {entryPrice && stopLossPrice && tp1Price && (
-              <div className="bg-slate-950/70 border border-slate-850/60 p-3 rounded-xl space-y-1.5">
+              <div className="bg-slate-50/70 border border-slate-850/60 p-3 rounded-xl space-y-1.5">
                 <span className="text-[9px] uppercase tracking-wider text-slate-500 font-mono font-bold">
                   SMC Ratio Matrix
                 </span>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-slate-400">Risked Points:</span>
+                  <span className="text-[10px] text-slate-600">Risked Points:</span>
                   <span className="text-xs font-mono font-bold text-rose-400">
                     {Math.abs(entryPrice - stopLossPrice).toFixed(1)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between pb-1.5 border-b border-slate-900/60">
-                  <span className="text-[10px] text-slate-400">Target Points:</span>
+                <div className="flex items-center justify-between pb-1.5 border-b border-slate-200/60">
+                  <span className="text-[10px] text-slate-600">Target Points:</span>
                   <span className="text-xs font-mono font-bold text-emerald-400">
                     {Math.abs(tp1Price - entryPrice).toFixed(1)}
                   </span>
@@ -2025,14 +2039,14 @@ export default function InteractiveCanvas({
 
             {/* Journal Commentary text notes */}
             <div className="space-y-1.5 pt-1">
-              <label className="block text-[10px] uppercase font-mono tracking-widest font-extrabold text-slate-400">
+              <label className="block text-[10px] uppercase font-mono tracking-widest font-extrabold text-slate-600">
                 Journal Commentary
               </label>
               <textarea
                 placeholder="Type structural notes, mitigation reasons, liquidity targets..."
                 value={tradeNotes}
                 onChange={(e) => setTradeNotes(e.target.value)}
-                className="w-full min-h-[90px] p-2.5 bg-slate-950 border border-slate-850 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans"
+                className="w-full min-h-[90px] p-2.5 bg-slate-50 border border-slate-850 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-indigo-400 leading-relaxed font-sans"
               />
             </div>
 
@@ -2055,7 +2069,7 @@ export default function InteractiveCanvas({
             <button
               onClick={handleSaveCompleteTradePlan}
               disabled={isSaving}
-              className="w-full p-3 bg-[#4f46e5] hover:bg-[#4338ca] border border-indigo-500 font-black tracking-wider rounded-xl text-[11px] uppercase font-mono text-white transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-950/50 disabled:opacity-50 cursor-pointer"
+              className="w-full p-3 bg-[#4f46e5] hover:bg-[#4338ca] border border-indigo-500 font-black tracking-wider rounded-xl text-[11px] uppercase font-mono text-slate-900 transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200/50 disabled:opacity-50 cursor-pointer"
             >
               {isSaving ? (
                 <>

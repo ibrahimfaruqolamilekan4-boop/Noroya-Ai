@@ -1,4 +1,3 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { 
   collection, 
   doc, 
@@ -59,61 +58,8 @@ export interface Trade {
   };
 }
 
-export interface dbConfig {
-  url: string;
-  anonKey: string;
-}
-
 // Key names in Local Storage
-const CONFIG_KEY = "synthetic_smc_supabase_config";
 const LOCAL_TRADES_KEY = "synthetic_smc_local_trades";
-
-// Save Supabase config manually entered by user
-export function saveSupabaseConfig(url: string, anonKey: string): void {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({ url, anonKey }));
-}
-
-// Retrieve active Supabase config (checks local storage, then import.meta.env as backup)
-export function getSupabaseConfig(): dbConfig | null {
-  try {
-    const saved = localStorage.getItem(CONFIG_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.url && parsed.anonKey) {
-        return parsed;
-      }
-    }
-  } catch (e) {
-    console.error("Error reading saved Supabase config:", e);
-  }
-
-  // Backup from environmental variables
-  const envUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
-  const envKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
-
-  if (envUrl && envKey) {
-    return { url: envUrl, anonKey: envKey };
-  }
-
-  return null;
-}
-
-// Clear Supabase configuration
-export function clearSupabaseConfig(): void {
-  localStorage.removeItem(CONFIG_KEY);
-}
-
-// Initialize Supabase Client dynamically
-export function getSupabaseClient(): SupabaseClient | null {
-  const config = getSupabaseConfig();
-  if (!config) return null;
-  try {
-    return createClient(config.url, config.anonKey);
-  } catch (err) {
-    console.error("Supabase client init failed:", err);
-    return null;
-  }
-}
 
 // Save trade records
 export async function saveTrade(tradeData: Omit<Trade, "id" | "created_at">): Promise<Trade> {
@@ -161,57 +107,7 @@ export async function saveTrade(tradeData: Omit<Trade, "id" | "created_at">): Pr
     }
   }
 
-  // 2. Try Supabase fallback
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from("trades")
-        .insert([
-          {
-            symbol: tradeData.symbol,
-            timeframe: tradeData.timeframe,
-            bias: tradeData.bias,
-            entry_price: tradeData.entry_price,
-            stop_loss: tradeData.stop_loss,
-            take_profit: tradeData.take_profit,
-            risk_reward: tradeData.risk_reward,
-            image_url: tradeData.image_url,
-            notes: tradeData.notes,
-            status: tradeData.status,
-          },
-        ])
-        .select();
-
-      if (error) throw error;
-      const savedTrade = data[0];
-
-      if (tradeData.analysis_info) {
-        const { error: analysisError } = await supabase.from("analysis_results").insert([
-          {
-            trade_id: savedTrade.id,
-            market_structure: tradeData.analysis_info.marketStructure,
-            order_block: tradeData.analysis_info.orderBlock,
-            supply_demand: tradeData.analysis_info.supplyDemandZones,
-            fibonacci: tradeData.analysis_info.fibonacciRetracement,
-            rationale: tradeData.analysis_info.tradeSetup.rationale,
-            educational_insight: tradeData.analysis_info.educationalInsight,
-          },
-        ]);
-        if (analysisError) {
-          console.warn("Could not save analysis details into relational database schema, falling back to JSON serialization:", analysisError);
-        }
-      }
-
-      fullTrade.id = savedTrade.id;
-      fullTrade.created_at = savedTrade.created_at;
-      return fullTrade;
-    } catch (e: any) {
-      console.warn("Supabase save failed (tables might not be created or initialized). Storing locally for resilience. Error:", e);
-    }
-  }
-
-  // 3. Local storage engine fallback (guarantees zero-failure experience)
+  // 2. Local storage engine fallback (guarantees zero-failure experience)
   const localTrades = getLocalTrades();
   localTrades.unshift(fullTrade);
   localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(localTrades));
@@ -266,72 +162,7 @@ export async function getTrades(): Promise<Trade[]> {
     }
   }
 
-  // 2. Try Supabase fallback
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { data: trades, error } = await supabase
-        .from("trades")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      // Hydrate with analysis details if any exist
-      const hydratedTrades: Trade[] = [];
-      for (const t of trades) {
-        let analysis_info = undefined;
-        try {
-          const { data: analysisRes } = await supabase
-            .from("analysis_results")
-            .select("*")
-            .eq("trade_id", t.id)
-            .maybeSingle();
-
-          if (analysisRes) {
-            analysis_info = {
-              marketStructure: analysisRes.market_structure,
-              orderBlock: typeof analysisRes.order_block === "string" ? JSON.parse(analysisRes.order_block) : analysisRes.order_block,
-              supplyDemandZones: typeof analysisRes.supply_demand === "string" ? JSON.parse(analysisRes.supply_demand) : analysisRes.supply_demand,
-              fibonacciRetracement: typeof analysisRes.fibonacci === "string" ? JSON.parse(analysisRes.fibonacci) : analysisRes.fibonacci,
-              tradeSetup: {
-                type: t.bias === "BULLISH" ? "BUY" : t.bias === "BEARISH" ? "SELL" : "WAIT",
-                entry: t.entry_price,
-                stopLoss: t.stop_loss,
-                takeProfits: [t.take_profit],
-                riskRewardRatio: t.risk_reward,
-                rationale: analysisRes.rationale || ""
-              },
-              educationalInsight: analysisRes.educational_insight
-            };
-          }
-        } catch (_) {}
-
-        hydratedTrades.push({
-          id: t.id,
-          created_at: t.created_at,
-          symbol: t.symbol,
-          timeframe: t.timeframe,
-          bias: t.bias,
-          entry_price: Number(t.entry_price),
-          stop_loss: Number(t.stop_loss),
-          take_profit: Number(t.take_profit),
-          risk_reward: t.risk_reward,
-          image_url: t.image_url,
-          notes: t.notes,
-          status: t.status,
-          exit_price: t.exit_price !== undefined && t.exit_price !== null ? Number(t.exit_price) : undefined,
-          pnl: t.pnl !== undefined && t.pnl !== null ? Number(t.pnl) : undefined,
-          analysis_info
-        });
-      }
-
-      return hydratedTrades;
-    } catch (e: any) {
-      console.warn("Could not fetch remote trades from Supabase schemas. Loading local backups. Error:", e);
-    }
-  }
-
+  // 2. Local storage fallback
   return getLocalTrades();
 }
 
@@ -398,18 +229,7 @@ export async function deleteTrade(id: string): Promise<boolean> {
     }
   }
 
-  // 2. Try Supabase fallback
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { error } = await supabase.from("trades").delete().eq("id", id);
-      if (!error) return true;
-    } catch (e) {
-      console.error("Supabase deletion error:", e);
-    }
-  }
-
-  // Local sync fallback
+  // 2. Local sync fallback
   const localTrades = getLocalTrades();
   const filtered = localTrades.filter((t) => t.id !== id);
   localStorage.setItem(LOCAL_TRADES_KEY, JSON.stringify(filtered));
@@ -431,17 +251,6 @@ export async function updateTradeNotes(
     } catch (err: any) {
       console.error("Firestore update notes exception:", err);
       handleFirestoreError(err, OperationType.UPDATE, path);
-    }
-  }
-
-  // 2. Try Supabase fallback
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const { error } = await supabase.from("trades").update({ notes }).eq("id", id);
-      if (!error) return true;
-    } catch (e) {
-      console.error("Database notes update error:", e);
     }
   }
 
@@ -476,21 +285,6 @@ export async function updateTradeStatus(
     } catch (err: any) {
       console.error("Firestore update status exception:", err);
       handleFirestoreError(err, OperationType.UPDATE, path);
-    }
-  }
-
-  // 2. Try Supabase fallback
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      const updateData: any = { status };
-      if (exit_price !== undefined) updateData.exit_price = exit_price;
-      if (pnl !== undefined) updateData.pnl = pnl;
-
-      const { error } = await supabase.from("trades").update(updateData).eq("id", id);
-      if (!error) return true;
-    } catch (e) {
-      console.error("Database status update error:", e);
     }
   }
 

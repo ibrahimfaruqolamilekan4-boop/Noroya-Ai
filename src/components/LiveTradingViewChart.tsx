@@ -21,6 +21,7 @@ interface LiveTradingViewChartProps {
   analysisResult: any;
   onSyncLevels?: (levels: { entry: number; stopLoss: number; tp1: number; tp2: number }) => void;
   currentWorkspaceLevels?: { entry: number; stopLoss: number; tp1: number; tp2: number };
+  onCaptureScreenshot?: (dataUrl: string) => void;
 }
 
 export interface DivergenceInfo {
@@ -172,6 +173,7 @@ export default function LiveTradingViewChart({
   analysisResult,
   onSyncLevels,
   currentWorkspaceLevels,
+  onCaptureScreenshot,
 }: LiveTradingViewChartProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<any>(null);
@@ -267,16 +269,16 @@ export default function LiveTradingViewChart({
       width: container.clientWidth,
       height: 420,
       layout: {
-        background: { color: "#0b0f19" },
-        textColor: "#94a3b8",
+        background: { color: "#ffffff" },
+        textColor: "#475569", // slate-600
         fontFamily: "JetBrains Mono, monospace, sans-serif",
       },
       grid: {
-        vertLines: { color: "rgba(30, 41, 59, 0.4)" },
-        horzLines: { color: "rgba(30, 41, 59, 0.4)" },
+        vertLines: { color: "rgba(226, 232, 240, 0.6)" },
+        horzLines: { color: "rgba(226, 232, 240, 0.6)" },
       },
       rightPriceScale: {
-        borderColor: "rgba(148,163,184,0.15)",
+        borderColor: "rgba(203, 213, 225, 0.5)",
         visible: true,
         scaleMargins: {
           top: 0.15,
@@ -284,7 +286,7 @@ export default function LiveTradingViewChart({
         },
       },
       timeScale: {
-        borderColor: "rgba(148,163,184,0.15)",
+        borderColor: "rgba(203, 213, 225, 0.5)",
         timeVisible: true,
         secondsVisible: false,
       },
@@ -377,16 +379,16 @@ export default function LiveTradingViewChart({
         width: rsiContainerRef.current.clientWidth,
         height: 150,
         layout: {
-          background: { color: "#070b13" },
-          textColor: "#94a3b8",
+          background: { color: "#f8fafc" }, // slate-50
+          textColor: "#475569",
           fontFamily: "JetBrains Mono, monospace, sans-serif",
         },
         grid: {
-          vertLines: { color: "rgba(30, 41, 59, 0.2)" },
-          horzLines: { color: "rgba(30, 41, 59, 0.2)" },
+          vertLines: { color: "rgba(226, 232, 240, 0.6)" },
+          horzLines: { color: "rgba(226, 232, 240, 0.6)" },
         },
         rightPriceScale: {
-          borderColor: "rgba(148,163,184,0.15)",
+          borderColor: "rgba(203, 213, 225, 0.5)",
           visible: true,
           scaleMargins: {
             top: 0.1,
@@ -394,7 +396,7 @@ export default function LiveTradingViewChart({
           },
         },
         timeScale: {
-          borderColor: "rgba(148,163,184,0.15)",
+          borderColor: "rgba(203, 213, 225, 0.5)",
           visible: false,
           timeVisible: true,
           secondsVisible: false,
@@ -785,7 +787,7 @@ export default function LiveTradingViewChart({
     setDerivError(null);
     setIsDerivLoading(true);
 
-    const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${derivAppId}`;
+    const wsUrl = `wss://ws.binaryws.com/websockets/v3?app_id=${derivAppId}`;
     let ws: WebSocket | null = null;
 
     try {
@@ -818,7 +820,7 @@ export default function LiveTradingViewChart({
           const res = JSON.parse(event.data);
           
           if (res.error) {
-            console.error("Deriv API Error:", res.error);
+            console.warn("Deriv API Warning:", res.error.message);
             setDerivError(res.error.message || "Deriv stream error.");
             setIsDerivLoading(false);
             return;
@@ -904,13 +906,13 @@ export default function LiveTradingViewChart({
             }
           }
         } catch (err) {
-          console.error("Failed to parse Deriv WebSocket message:", err);
+          console.warn("Failed to parse Deriv WebSocket message");
         }
       };
 
       ws.onerror = (err) => {
-        console.error("Deriv WebSocket Error:", err);
-        setDerivError("Failed to connect to Deriv API server.");
+        console.warn("Deriv WebSocket Connection Issue. Using local simulation fallback.");
+        setDerivError("Failed to connect to Deriv API server. Check your network or App ID.");
         setDerivConnStatus("DISCONNECTED");
         setIsDerivLoading(false);
       };
@@ -1111,13 +1113,20 @@ export default function LiveTradingViewChart({
     }
   };
 
+  const handleCaptureScreenshot = () => {
+    if (chartRef.current && onCaptureScreenshot) {
+      const dataUrl = chartRef.current.takeScreenshot().toDataURL("image/png");
+      onCaptureScreenshot(dataUrl);
+    }
+  };
+
   return (
-    <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="live-tradingview-terminal-container">
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="live-tradingview-terminal-container">
       {/* Dynamic light accent */}
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-indigo-600 to-emerald-500"></div>
 
       {/* Title & Connection Status */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-800 pb-4 mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-4">
         <div>
           <div className="flex items-center gap-2">
             <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
@@ -1132,12 +1141,12 @@ export default function LiveTradingViewChart({
                 : "REAL-TIME SIMULATION ENGINE"}
             </span>
             {isRealDerivFeed && derivAccountEmail && (
-              <span className="text-[10px] bg-slate-900 border border-slate-800 text-slate-300 font-mono px-2 py-0.5 rounded">
+              <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-mono px-2 py-0.5 rounded">
                 Account: {derivAccountEmail}
               </span>
             )}
           </div>
-          <h3 className="text-md font-bold font-display text-white mt-1 flex items-center gap-2">
+          <h3 className="text-md font-bold font-display text-slate-900 mt-1 flex items-center gap-2">
             <Activity className="h-4 w-4 text-cyan-400 animate-pulse" />
             Live {symbol.name} terminal
           </h3>
@@ -1150,7 +1159,7 @@ export default function LiveTradingViewChart({
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Feed Mode Toggle */}
-          <div className="flex bg-[#070b13] border border-slate-800 rounded-lg p-0.5 font-mono text-[9px] font-bold uppercase">
+          <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5 font-mono text-[9px] font-bold uppercase">
             <button
               onClick={() => {
                 setIsRealDerivFeed(true);
@@ -1159,8 +1168,8 @@ export default function LiveTradingViewChart({
               type="button"
               className={`px-2 py-1 rounded transition-all cursor-pointer ${
                 isRealDerivFeed
-                  ? "bg-cyan-600 text-white shadow font-extrabold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-cyan-600 text-slate-900 shadow font-extrabold"
+                  : "text-slate-600 hover:text-slate-800"
               }`}
             >
               Deriv Live
@@ -1173,8 +1182,8 @@ export default function LiveTradingViewChart({
               type="button"
               className={`px-2 py-1 rounded transition-all cursor-pointer ${
                 !isRealDerivFeed
-                  ? "bg-indigo-600 text-white shadow font-extrabold"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-indigo-600 text-slate-900 shadow font-extrabold"
+                  : "text-slate-600 hover:text-slate-800"
               }`}
             >
               Simulation
@@ -1187,21 +1196,21 @@ export default function LiveTradingViewChart({
             className={`px-3 py-1 text-[10px] font-mono font-bold rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
               isLiveEnabled 
                 ? "bg-emerald-950/50 border border-emerald-700/60 text-emerald-400 shadow-md shadow-emerald-900/10"
-                : "bg-slate-900 border border-slate-800 text-slate-400"
+                : "bg-slate-100 border border-slate-200 text-slate-600"
             }`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${isLiveEnabled ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`} />
             {isLiveEnabled ? "STREAMING LIVE" : "PAUSED"}
           </button>
 
-          <span className="text-[11px] font-mono font-black text-slate-300">
+          <span className="text-[11px] font-mono font-black text-slate-700">
             Bid: <span className="text-cyan-400">{lastTickPrice?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "..."}</span>
           </span>
         </div>
       </div>
 
       {/* Visual Workspace Controls bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[#0d1527] border border-slate-800/80 rounded-xl p-3 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3 mb-4">
         
         {/* Toggle zones */}
         <div className="flex flex-wrap items-center gap-2">
@@ -1211,7 +1220,7 @@ export default function LiveTradingViewChart({
             className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
               showAiZones 
                 ? "bg-indigo-950/40 border-indigo-500/30 text-indigo-300 font-extrabold"
-                : "bg-slate-900/60 border-slate-800 text-slate-500 font-normal"
+                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
             }`}
           >
             {showAiZones ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -1224,7 +1233,7 @@ export default function LiveTradingViewChart({
             className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
               showFibLines 
                 ? "bg-amber-950/40 border-amber-500/30 text-amber-300 font-extrabold"
-                : "bg-slate-900/60 border-slate-800 text-slate-500 font-normal"
+                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
             }`}
           >
             {showFibLines ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -1237,7 +1246,7 @@ export default function LiveTradingViewChart({
             className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
               showRsi 
                 ? "bg-purple-950/40 border-purple-500/30 text-purple-300 font-extrabold"
-                : "bg-slate-900/60 border-slate-800 text-slate-500 font-normal"
+                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
             }`}
           >
             {showRsi ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
@@ -1247,7 +1256,7 @@ export default function LiveTradingViewChart({
 
         {/* Sync Trigger / Save to Workspace */}
         <div className="md:col-span-3 flex flex-wrap items-center justify-end gap-3 font-sans">
-          <span className="text-[10px] font-medium text-slate-400 font-mono">
+          <span className="text-[10px] font-medium text-slate-600 font-mono">
             LIVE R:R MULTIPLIER: <span className="text-emerald-400 font-bold">{liveRRRatio}</span>
           </span>
 
@@ -1255,19 +1264,30 @@ export default function LiveTradingViewChart({
           <button
             onClick={handleForceMacroTrend}
             type="button"
-            className="px-2.5 py-1.5 bg-[#1e293b] hover:bg-slate-800 text-[10px] font-bold uppercase tracking-wider font-mono rounded-lg border border-slate-700 hover:text-white transition-all flex items-center gap-1 cursor-pointer"
+            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-[10px] font-bold uppercase tracking-wider font-mono rounded-lg border border-slate-300 hover:text-slate-900 transition-all flex items-center gap-1 cursor-pointer"
           >
             <Zap className="h-3 w-3 text-cyan-400" />
             {isBoom ? "Trigger Spike!" : isCrash ? "Trigger Crash!" : "Trigger Volatility!"}
           </button>
+
+          {onCaptureScreenshot && (
+            <button
+              onClick={handleCaptureScreenshot}
+              type="button"
+              className="px-3 py-1.5 bg-amber-600/90 hover:bg-amber-500 text-[10.5px] font-bold uppercase tracking-wider text-slate-900 rounded-lg border border-amber-500/50 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-900/30"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Capture & Analyze
+            </button>
+          )}
 
           <button
             onClick={handleLevelSyncClick}
             type="button"
             className={`px-3 py-1.5 rounded-lg font-bold text-[10.5px] uppercase tracking-wide transition-all duration-350 flex items-center gap-1.5 cursor-pointer ${
               syncStatus
-                ? "bg-emerald-600 border border-emerald-500 text-white"
-                : "bg-gradient-to-r from-cyan-600 to-indigo-650 hover:from-cyan-500 hover:to-indigo-550 border border-cyan-500/30 text-cyan-100 shadow-md shadow-cyan-950/40 hover:scale-[1.02]"
+                ? "bg-emerald-600 border border-emerald-500 text-slate-900"
+                : "bg-gradient-to-r from-cyan-600 to-indigo-650 hover:from-cyan-500 hover:to-indigo-550 border border-cyan-500/30 text-cyan-100 shadow-md shadow-cyan-200/40 hover:scale-[1.02]"
             }`}
           >
             {syncStatus ? (
@@ -1286,14 +1306,14 @@ export default function LiveTradingViewChart({
       </div>
 
       {/* Main Lightweight chart mounting point */}
-      <div className="relative bg-[#0b0f19] border border-slate-800/60 rounded-xl overflow-hidden flex flex-col min-h-[420px]" id="tradingview-dual-pane-system">
+      <div className="relative bg-white border border-slate-200/60 rounded-xl overflow-hidden flex flex-col min-h-[420px]" id="tradingview-dual-pane-system">
         {isRealDerivFeed && isDerivLoading && (
-          <div className="absolute inset-0 bg-[#0b0f19]/85 backdrop-blur-sm flex flex-col items-center justify-center z-30 transition-all">
+          <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center z-30 transition-all">
             <RefreshCw className="h-8 w-8 text-cyan-400 animate-spin mb-3" />
             <span className="text-xs font-mono text-cyan-350 font-bold tracking-widest uppercase">
               Connecting Deriv Secure Server
             </span>
-            <span className="text-[10px] text-slate-400 mt-2 font-mono">
+            <span className="text-[10px] text-slate-600 mt-2 font-mono">
               Fetching live {symbol.name} algorithm ticks...
             </span>
           </div>
@@ -1302,7 +1322,7 @@ export default function LiveTradingViewChart({
         
         {/* RSI Divergence Indicator Sub-Pane */}
         {showRsi && (
-          <div className="w-full h-[155px] border-t border-slate-850/80 bg-[#070b13] relative overflow-hidden shrink-0" id="rsi-indicator-docking-pane">
+          <div className="w-full h-[155px] border-t border-slate-850/80 bg-slate-50 relative overflow-hidden shrink-0" id="rsi-indicator-docking-pane">
             <div ref={rsiContainerRef} className="w-full h-full" />
             <div className="absolute top-2 left-4 text-[9px] font-mono tracking-wider text-purple-400 font-bold uppercase pointer-events-none z-20 flex items-center gap-1.5 select-none">
               <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
@@ -1319,11 +1339,11 @@ export default function LiveTradingViewChart({
       </div>
 
       {/* RSI Divergence HUD (Heads-Up Display) Panel */}
-      <div className="bg-[#090d16] border border-slate-800/60 rounded-xl p-4 mt-4 text-xs font-sans">
+      <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mt-4 text-xs font-sans">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <Activity className="h-3.5 w-3.5 text-purple-400" />
-            <span className="font-bold text-slate-200">RSI Divergence HUD Scanner</span>
+            <span className="font-bold text-slate-800">RSI Divergence HUD Scanner</span>
           </div>
           <div className="text-[9px] uppercase font-mono px-2 py-0.5 rounded bg-purple-950/40 border border-purple-500/20 text-purple-300 font-semibold">
             Active 14 Period Scanner
@@ -1361,7 +1381,7 @@ export default function LiveTradingViewChart({
                     }
                   </p>
                   <div className="flex items-center gap-3 mt-1.5 text-[9px] font-mono text-slate-450 uppercase">
-                    <span className="font-semibold text-slate-300">CONFLUENCE: SMC {div.type === "BULLISH" ? "DEMAND OB" : "SUPPLY OB"} REVERSAL ALIGNMENT</span>
+                    <span className="font-semibold text-slate-700">CONFLUENCE: SMC {div.type === "BULLISH" ? "DEMAND OB" : "SUPPLY OB"} REVERSAL ALIGNMENT</span>
                   </div>
                 </div>
               </div>
@@ -1371,7 +1391,7 @@ export default function LiveTradingViewChart({
       </div>
 
       {/* Interactive Sliders for adjusting levels right beside the chart */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4 font-mono bg-slate-900/40 border border-slate-850 p-4 rounded-xl">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4 font-mono bg-slate-100/40 border border-slate-850 p-4 rounded-xl">
         <div className="space-y-1">
           <label className="text-[9px] font-bold text-cyan-400 flex justify-between uppercase">
             <span>Entry Level</span>
@@ -1384,7 +1404,7 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempEntry}
             onChange={(e) => setTempEntry(parseFloat(e.target.value))}
-            className="w-full accent-cyan-400 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-cyan-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -1400,7 +1420,7 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempSL}
             onChange={(e) => setTempSL(parseFloat(e.target.value))}
-            className="w-full accent-rose-500 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-rose-500 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -1416,7 +1436,7 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempTP1}
             onChange={(e) => setTempTP1(parseFloat(e.target.value))}
-            className="w-full accent-emerald-400 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-emerald-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
@@ -1432,7 +1452,7 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempTP2}
             onChange={(e) => setTempTP2(parseFloat(e.target.value))}
-            className="w-full accent-teal-400 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-teal-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
       </div>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+const derivAppId = "1089";
+const wsUrl = `wss://ws.binaryws.com/websockets/v3?app_id=${derivAppId}`;
+const ws = new WebSocket(wsUrl);
+ws.onopen = () => ws.send(JSON.stringify({ ticks: "R_75" }));
+ws.onmessage = (msg) => {
+  console.log(JSON.parse(msg.data));
+};
+</script>
+</body>
+</html>
