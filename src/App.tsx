@@ -399,6 +399,10 @@ export default function App() {
         body: JSON.stringify(requestBody),
       });
 
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error(`Server returned a non-JSON response (Status ${response.status}). If deployed on Vercel, ensure the API is configured correctly or wait for the latest GitHub push to deploy.`);
+      }
       const parsed = await response.json();
       clearInterval(phraseInterval);
 
