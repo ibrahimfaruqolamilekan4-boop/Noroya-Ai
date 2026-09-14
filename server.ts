@@ -1,13 +1,12 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { syncProjectToGitHub } from "./scripts/github-sync";
 
 dotenv.config();
 
-const app = express();
+export const app = express();
 const PORT = 3000;
 
 // Set body parser limits to support base64 screenshots of chart images
@@ -674,6 +673,7 @@ app.post("/api/github-sync", async (req: express.Request, res: express.Response)
 
 async function mountFrontend() {
   if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
@@ -687,9 +687,11 @@ async function mountFrontend() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Synthetics Analyzer] Service up and running in ${process.env.NODE_ENV || "development"} mode at: http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`[Synthetics Analyzer] Service up and running in ${process.env.NODE_ENV || "development"} mode at: http://localhost:${PORT}`);
+    });
+  }
 }
 
 mountFrontend();
