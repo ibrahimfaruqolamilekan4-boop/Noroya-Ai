@@ -46,6 +46,7 @@ import PineScriptGenerator from "./components/PineScriptGenerator";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getUserLearnings } from "./lib/firebaseChat";
+const compressImage = async (dataUrl: string, maxWidth = 1000, quality = 0.5): Promise<string> => { return new Promise((resolve, reject) => { const img = new Image(); img.onload = () => { const canvas = document.createElement("canvas"); let width = img.width; let height = img.height; if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext("2d"); if (!ctx) return resolve(dataUrl); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL("image/jpeg", quality)); }; img.onerror = (err) => resolve(dataUrl); img.src = dataUrl; }); };
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"analyzer" | "calculator" | "journal" | "databases">("analyzer");
@@ -375,9 +376,23 @@ export default function App() {
         console.warn("Could not fetch live Deriv market data:", e);
       }
 
+      // Compress images before sending to Vercel (to avoid 4.5MB Payload Too Large error)
+      let compressedImages = [];
+      let compressedTargetImage = targetImage;
+      
+      if (isMtfMode) {
+        compressedImages = await Promise.all([
+          compressImage(mtfImages.m30.preview),
+          compressImage(mtfImages.h4.preview),
+          compressImage(mtfImages.d1.preview)
+        ]);
+      } else if (targetImage) {
+        compressedTargetImage = await compressImage(targetImage);
+      }
+
       const requestBody = isMtfMode
         ? {
-            images: [mtfImages.m30.preview, mtfImages.h4.preview, mtfImages.d1.preview],
+            images: compressedImages,
             symbol: customSymbolText ? customSymbolText : symbol.name,
             timeframe: "30M", // Primary focus
             tradeHistory: trades,
@@ -385,7 +400,7 @@ export default function App() {
             currentPrice: currentPrice
           }
         : {
-            image: targetImage,
+            image: compressedTargetImage,
             symbol: customSymbolText ? customSymbolText : symbol.name,
             timeframe: timeframe,
             tradeHistory: trades,
@@ -407,7 +422,7 @@ export default function App() {
       clearInterval(phraseInterval);
 
       if (!response.ok || !parsed.success) {
-        throw new Error(parsed.error || "Execution failed. Check server console outputs.");
+        throw new Error(parsed.error ? (typeof parsed.error === "string" ? parsed.error : JSON.stringify(parsed.error)) : (parsed.message ? parsed.message : `Execution failed: ${JSON.stringify(parsed)}`));
       }
 
       setAnalysisResult(parsed.data);
