@@ -89,6 +89,7 @@ export default function App() {
     tp2: 0,
   });
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [quickApiKey, setQuickApiKey] = useState<string>("");
 
   // Save/Journaling metadata additions
   const [isSaving, setIsSaving] = useState(false);
@@ -933,9 +934,61 @@ export default function App() {
                 </button>
 
                 {errorMessage && (
-                  <div className="mt-4 p-3 rounded-xl border border-rose-950 bg-rose-950/20 text-rose-300 text-xs flex gap-2">
-                    <AlertCircle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
-                    <p className="leading-relaxed">{errorMessage}</p>
+                  <div className="mt-4 p-4 rounded-xl border border-rose-300 bg-rose-50 text-slate-900 text-xs shadow-sm">
+                    <div className="flex gap-2.5 items-start">
+                      <AlertCircle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-rose-950 mb-1 text-xs">Action Required</p>
+                        <p className="text-slate-800 leading-relaxed font-medium">{errorMessage}</p>
+
+                        {errorMessage.includes("GEMINI_API_KEY") && (
+                          <div className="mt-3 pt-3 border-t border-rose-200/90 space-y-2">
+                            <p className="text-[11px] font-bold text-slate-900">
+                              Instant Setup: Paste your Gemini API Key here to run immediately
+                            </p>
+                            <div className="flex flex-col sm:flex-row gap-2">
+                              <input
+                                type="password"
+                                placeholder="AIzaSy..."
+                                value={quickApiKey}
+                                onChange={(e) => setQuickApiKey(e.target.value)}
+                                className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 font-mono focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (quickApiKey.trim()) {
+                                    localStorage.setItem("custom_gemini_api_key", quickApiKey.trim());
+                                    setErrorMessage("");
+                                    startSMCAnalysis();
+                                  }
+                                }}
+                                disabled={!quickApiKey.trim()}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-lg text-xs transition cursor-pointer flex items-center justify-center gap-1.5 shrink-0"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Save & Analyze Now
+                              </button>
+                            </div>
+                            <div className="flex items-center justify-between pt-1">
+                              <a
+                                href="https://aistudio.google.com/app/apikey"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[11px] text-indigo-600 hover:underline font-bold"
+                              >
+                                Get a free Gemini API key ↗
+                              </a>
+                              <button
+                                onClick={() => setActiveTab("databases")}
+                                className="text-[11px] text-slate-600 hover:text-slate-900 underline font-medium cursor-pointer"
+                              >
+                                Or open Control Tab
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
