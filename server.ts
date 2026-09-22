@@ -62,11 +62,11 @@ async function generateGeminiContent(
   const modelsToTry = [primaryModel];
   
   if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.6-flash", "gemini-3.1-flash-lite");
   } else if (primaryModel === "gemini-3.1-flash-lite") {
-    modelsToTry.push("gemini-3.8-flash");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash");
   } else {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite");
   }
 
   // Deduplicate model list to maintain clean sequential order

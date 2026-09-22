@@ -24,9 +24,9 @@ async function generateGeminiContent(
 ): Promise<any> {
   const modelsToTry = [primaryModel];
   if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.6-flash", "gemini-3.1-flash-lite");
   } else {
-    modelsToTry.push("gemini-3.8-flash");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash");
   }
 
   const uniqueModels = Array.from(new Set(modelsToTry));
