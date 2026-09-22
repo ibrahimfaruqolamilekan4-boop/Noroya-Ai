@@ -408,9 +408,16 @@ export default function App() {
             currentPrice: currentPrice
           };
 
-      const response = await fetch("/api/analyze-chart", {
+      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
+      const response = await fetch(`/api/analyze-chart?_t=${Date.now()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          ...(customKey ? { "x-gemini-key": customKey } : {})
+        },
         body: JSON.stringify(requestBody),
       });
 

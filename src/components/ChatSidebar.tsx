@@ -142,9 +142,16 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
       const plainLearnings = learnings.map(l => l.learnings);
 
       // Call Chat-Bot API
-      const res = await fetch("/api/chat-bot", {
+      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
+      const res = await fetch(`/api/chat-bot?_t=${Date.now()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          ...(customKey ? { "x-gemini-key": customKey } : {})
+        },
         body: JSON.stringify({
           prompt: queryStr,
           history: messages.slice(-10).map(m => ({
@@ -229,9 +236,16 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
   const handleGenerateDiagram = async () => {
     setIsGeneratingDiagram(true);
     try {
-      const res = await fetch("/api/generate-educational-image", {
+      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
+      const res = await fetch(`/api/generate-educational-image?_t=${Date.now()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          ...(customKey ? { "x-gemini-key": customKey } : {})
+        },
         body: JSON.stringify({
           subject: diagramSubject,
           explanation: `SMC concepts illustrating support, wicks, zones, and entry biases for synthetic volatility study.`

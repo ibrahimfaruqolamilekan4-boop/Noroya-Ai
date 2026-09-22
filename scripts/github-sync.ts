@@ -1,4 +1,3 @@
-import { Octokit } from "octokit";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -8,6 +7,28 @@ export interface SyncOptions {
   repo: string;
   branch?: string;
   commitMessage?: string;
+}
+
+async function githubRequest(url: string, token: string, options: RequestInit = {}) {
+  const headers = {
+    "Accept": "application/vnd.github.v3+json",
+    "Authorization": `Bearer ${token}`,
+    "User-Agent": "Noroya-Ai-Sync",
+    "Content-Type": "application/json",
+    ...(options.headers || {}),
+  };
+
+  const res = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data.message || `GitHub API error: HTTP ${res.status}`;
+    throw new Error(message);
+  }
+  return data;
 }
 
 export async function syncProjectToGitHub(options: SyncOptions) {
@@ -23,30 +44,19 @@ export async function syncProjectToGitHub(options: SyncOptions) {
   if (!owner) throw new Error("GitHub Owner / Username (GITHUB_OWNER) is required.");
   if (!repo) throw new Error("GitHub Repository Name (GITHUB_REPO) is required.");
 
-  const octokit = new Octokit({ auth: token });
-
   console.log(`[GitHub Sync] Starting sync for ${owner}/${repo} on branch ${branch}...`);
 
   let latestCommitSha: string | null = null;
-  let baseTreeSha: string | null = null;
 
   try {
-    const { data: refData } = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-    });
-    latestCommitSha = refData.object.sha;
-    
-    const { data: commitData } = await octokit.rest.git.getCommit({
-      owner,
-      repo,
-      commit_sha: latestCommitSha,
-    });
-    baseTreeSha = commitData.tree.sha;
-    console.log(`[GitHub Sync] Found existing branch ${branch}. Base commit: ${latestCommitSha}`);
+    const refData = await githubRequest(
+      `https://api.github.com/repos/${owner}/${repo}/git/ref/heads/${branch}`,
+      token
+    );
+    latestCommitSha = refData.object?.sha || null;
+    console.log(`[GitHub Sync] Found branch ${branch}. Latest commit: ${latestCommitSha}`);
   } catch (err: any) {
-    console.log(`[GitHub Sync] Branch ${branch} might be new or empty. Creating initial commit structure...`);
+    console.log(`[GitHub Sync] Branch ${branch} might be new or empty:`, err.message);
   }
 
   const rootDir = process.cwd();
@@ -75,35 +85,45 @@ export async function syncProjectToGitHub(options: SyncOptions) {
 
   const treeItems: Array<{
     path: string;
-    mode: "100644" | "100755" | "040000" | "160000" | "120000";
-    type: "blob" | "tree" | "commit";
-    sha?: string;
+    mode: "100644";
+    type: "blob";
+    sha: string;
   }> = [];
 
   for (const relPath of allFiles) {
     const absPath = path.join(rootDir, relPath);
     const content = fs.readFileSync(absPath);
-    const isBinary = relPath.endsWith(".png") || relPath.endsWith(".jpg") || relPath.endsWith(".ico") || relPath.endsWith(".pdf");
-    
+    const isBinary =
+      relPath.endsWith(".png") ||
+      relPath.endsWith(".jpg") ||
+      relPath.endsWith(".ico") ||
+      relPath.endsWith(".pdf");
+
     let blobData: { sha: string };
     if (isBinary) {
-      const base64Content = content.toString("base64");
-      const { data } = await octokit.rest.git.createBlob({
-        owner,
-        repo,
-        content: base64Content,
-        encoding: "base64",
-      });
-      blobData = data;
+      blobData = await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: content.toString("base64"),
+            encoding: "base64",
+          }),
+        }
+      );
     } else {
-      const textContent = content.toString("utf8");
-      const { data } = await octokit.rest.git.createBlob({
-        owner,
-        repo,
-        content: textContent,
-        encoding: "utf-8",
-      });
-      blobData = data;
+      blobData = await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/git/blobs`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: content.toString("utf8"),
+            encoding: "utf-8",
+          }),
+        }
+      );
     }
 
     treeItems.push({
@@ -114,66 +134,73 @@ export async function syncProjectToGitHub(options: SyncOptions) {
     });
   }
 
-  const { data: newTree } = await octokit.rest.git.createTree({
-    owner,
-    repo,
-    base_tree: baseTreeSha || undefined,
-    tree: treeItems as any,
-  });
+  // Create new tree with exactly the walked files (omitting base_tree purges deleted files)
+  const newTree = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/git/trees`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        tree: treeItems,
+      }),
+    }
+  );
   console.log(`[GitHub Sync] Created Git tree: ${newTree.sha}`);
 
-  const { data: newCommit } = await octokit.rest.git.createCommit({
-    owner,
-    repo,
-    message: commitMessage,
-    tree: newTree.sha,
-    parents: latestCommitSha ? [latestCommitSha] : [],
-  });
+  const newCommit = await githubRequest(
+    `https://api.github.com/repos/${owner}/${repo}/git/commits`,
+    token,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        message: commitMessage,
+        tree: newTree.sha,
+        parents: latestCommitSha ? [latestCommitSha] : [],
+      }),
+    }
+  );
   console.log(`[GitHub Sync] Created commit: ${newCommit.sha}`);
 
   if (latestCommitSha) {
-    await octokit.rest.git.updateRef({
-      owner,
-      repo,
-      ref: `heads/${branch}`,
-      sha: newCommit.sha,
-      force: true,
-    });
+    await githubRequest(
+      `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+      token,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          sha: newCommit.sha,
+          force: true,
+        }),
+      }
+    );
   } else {
     try {
-      await octokit.rest.git.createRef({
-        owner,
-        repo,
-        ref: `refs/heads/${branch}`,
-        sha: newCommit.sha,
-      });
+      await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs`,
+        token,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ref: `refs/heads/${branch}`,
+            sha: newCommit.sha,
+          }),
+        }
+      );
     } catch {
-      await octokit.rest.git.updateRef({
-        owner,
-        repo,
-        ref: `heads/${branch}`,
-        sha: newCommit.sha,
-        force: true,
-      });
+      await githubRequest(
+        `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${branch}`,
+        token,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            sha: newCommit.sha,
+            force: true,
+          }),
+        }
+      );
     }
   }
 
   console.log(`[GitHub Sync] Successfully pushed ${allFiles.length} files to ${owner}/${repo} (${branch})!`);
   return { success: true, filesCount: allFiles.length, commitSha: newCommit.sha };
-}
-
-// Auto-execute if run directly
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('github-sync.ts')) {
-  const token = process.env.GITHUB_TOKEN;
-  const repoUrl = process.env.REPO_URL;
-  if (token && repoUrl) {
-    const parts = repoUrl.replace("https://github.com/", "").split("/");
-    const owner = parts[0];
-    const repo = parts[1]?.replace(".git", "");
-    if (owner && repo) {
-      syncProjectToGitHub({ token, owner, repo }).catch(console.error);
-    }
-  } else {
-    console.log("To run directly: GITHUB_TOKEN=your_token REPO_URL=https://github.com/owner/repo npx tsx scripts/github-sync.ts");
-  }
 }

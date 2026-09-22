@@ -16,7 +16,9 @@ import {
   UserCheck, 
   Sparkles,
   Code,
-  ExternalLink
+  ExternalLink,
+  RefreshCw,
+  Zap
 } from "lucide-react";
 
 export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () => void }) {
@@ -24,6 +26,14 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+
+  // Gemini API Key state
+  const [geminiKeyInput, setGeminiKeyInput] = useState(
+    () => (typeof window !== "undefined" ? localStorage.getItem("custom_gemini_api_key") || "" : "")
+  );
+  const [geminiKeySaved, setGeminiKeySaved] = useState(false);
+  const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
 
   // GitHub Auto-Sync states
   const [ghToken, setGhToken] = useState("");
@@ -33,6 +43,74 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   const [ghLoading, setGhLoading] = useState(false);
   const [ghResult, setGhResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  const handleSaveGeminiKey = () => {
+    if (typeof window !== "undefined") {
+      if (geminiKeyInput.trim()) {
+        localStorage.setItem("custom_gemini_api_key", geminiKeyInput.trim());
+        setGeminiKeySaved(true);
+        setTimeout(() => setGeminiKeySaved(false), 2500);
+      } else {
+        localStorage.removeItem("custom_gemini_api_key");
+        setGeminiKeySaved(true);
+        setTimeout(() => setGeminiKeySaved(false), 2500);
+      }
+    }
+  };
+
+  const handleClearGeminiKey = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("custom_gemini_api_key");
+      setGeminiKeyInput("");
+      setGeminiKeySaved(false);
+    }
+  };
+
+  const handleTestHealth = async () => {
+    setHealthLoading(true);
+    setHealthStatus(null);
+    try {
+      const res = await fetch(`/api/health?_t=${Date.now()}`, {
+        cache: "no-store",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache"
+        }
+      });
+      const data = await res.json();
+      if (res.ok && data.status === "ok") {
+        setHealthStatus(`Connected! Server responded OK at ${new Date(data.time).toLocaleTimeString()}`);
+      } else {
+        setHealthStatus(`Server responded with unexpected status: ${res.status}`);
+      }
+    } catch (e: any) {
+      setHealthStatus(`Connection failed: ${e.message || "Network Error"}`);
+    } finally {
+      setHealthLoading(false);
+    }
+  };
+
+  const handlePurgeCacheAndReload = async () => {
+    if (typeof window !== "undefined") {
+      try {
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.unregister();
+          }
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          for (const k of keys) {
+            await caches.delete(k);
+          }
+        }
+      } catch (e) {
+        console.warn("Cache purge error:", e);
+      }
+      window.location.reload();
+    }
+  };
+
   const handleGitHubSync = async () => {
     if (!ghToken || !ghOwner || !ghRepo) {
       setGhResult({ success: false, message: "Please provide your GitHub Token, Owner/Username, and Repository Name." });
@@ -41,9 +119,16 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
     setGhLoading(true);
     setGhResult(null);
     try {
-      const res = await fetch("/api/github-sync", {
+      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
+      const res = await fetch(`/api/github-sync?_t=${Date.now()}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          "Pragma": "no-cache",
+          ...(customKey ? { "x-gemini-key": customKey } : {})
+        },
         body: JSON.stringify({
           token: ghToken,
           owner: ghOwner,
@@ -365,6 +450,121 @@ CREATE TABLE IF NOT EXISTS trades (
               Create New GitHub Repo
             </a>
           </div>
+        </div>
+      </div>
+
+      {/* Gemini AI & Vercel Deployment Setup */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-xl text-emerald-600">
+            <Key className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold font-display text-slate-900 flex items-center gap-2">
+              Gemini AI & Vercel Deployment Control
+              <span className="text-xs bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full text-emerald-700 font-semibold">
+                Direct Device Key
+              </span>
+            </h3>
+            <p className="text-xs text-slate-600">
+              Configure your Gemini API key for Vercel production or override locally on this browser
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+            <p className="text-slate-700 leading-relaxed">
+              <strong>How Vercel Works:</strong> On Vercel, the environment variable <code className="bg-slate-200 px-1 py-0.5 rounded text-slate-900 font-mono">GEMINI_API_KEY</code> must be added in your <strong>Vercel Dashboard &gt; Project &gt; Settings &gt; Environment Variables</strong>.
+            </p>
+            <p className="text-slate-600 leading-relaxed">
+              Alternatively, you can paste your Gemini API Key below. It will be stored securely in this browser&apos;s local memory and sent with every analysis request:
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Custom Gemini API Key (Optional Override)
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={geminiKeyInput}
+                onChange={(e) => setGeminiKeyInput(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-500 font-mono"
+              />
+              <button
+                onClick={handleSaveGeminiKey}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Save Key
+              </button>
+              {geminiKeyInput && (
+                <button
+                  onClick={handleClearGeminiKey}
+                  className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs rounded-xl transition cursor-pointer"
+                  title="Clear Key"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {geminiKeySaved && (
+              <p className="text-[11px] text-emerald-600 font-semibold mt-1.5 flex items-center gap-1">
+                <Check className="h-3.5 w-3.5" /> Gemini API Key saved for this device!
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Diagnostics & Cache Management */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="bg-indigo-500/10 border border-indigo-500/20 p-2.5 rounded-xl text-indigo-600">
+            <Zap className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold font-display text-slate-900 flex items-center gap-2">
+              System Diagnostics & Cache Purge
+            </h3>
+            <p className="text-xs text-slate-600">
+              Test server responsiveness and purge stale cached assets
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleTestHealth}
+              disabled={healthLoading}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-medium text-xs rounded-xl transition flex items-center gap-2 cursor-pointer"
+            >
+              {healthLoading ? (
+                <div className="h-3.5 w-3.5 border-2 border-slate-600 border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Zap className="h-3.5 w-3.5 text-amber-500" />
+              )}
+              Test Live Server Connection
+            </button>
+
+            <button
+              onClick={handlePurgeCacheAndReload}
+              className="px-4 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-medium text-xs rounded-xl transition flex items-center gap-2 cursor-pointer"
+            >
+              <RefreshCw className="h-3.5 w-3.5 text-rose-500" />
+              Purge Browser Cache & Force Reload
+            </button>
+          </div>
+
+          {healthStatus && (
+            <div className={`p-3 rounded-xl border text-xs font-mono ${healthStatus.includes("Connected") ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800"}`}>
+              {healthStatus}
+            </div>
+          )}
         </div>
       </div>
     </div>

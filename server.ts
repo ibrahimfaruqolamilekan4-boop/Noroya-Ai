@@ -13,24 +13,44 @@ const PORT = 3000;
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
+// CORS & Preflight middleware
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-gemini-key, Cache-Control, Pragma");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
+// Anti-caching middleware: ensure Vercel CDN and browsers never cache dynamic API responses
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.setHeader("Surrogate-Control", "no-store");
+  next();
+});
+
 // Lazy initializer for the Google Gen AI client following best practices
 let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(): GoogleGenAI {
-  if (!aiClient) {
-    const key = process.env.GEMINI_API_KEY;
-    if (!key) {
-      throw new Error("SYSTEM_ERROR: GEMINI_API_KEY is not configured in the Secrets panel.");
-    }
-    aiClient = new GoogleGenAI({
-      apiKey: key,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
+function getGeminiClient(customKey?: string): GoogleGenAI {
+  const key = customKey || process.env.GEMINI_API_KEY;
+  if (!key) {
+    throw new Error(
+      "GEMINI_API_KEY is not configured. If running on Vercel: go to your Vercel Project Dashboard > Settings > Environment Variables, add GEMINI_API_KEY, and redeploy. You can also paste your Gemini API Key in the Control tab."
+    );
   }
-  return aiClient;
+  return new GoogleGenAI({
+    apiKey: key,
+    httpOptions: {
+      headers: {
+        "User-Agent": "aistudio-build",
+      },
+    },
+  });
 }
 
 // Robust fallback & retry wrapper to resolve temporary Gemini 503 "High Demand" model overloading
@@ -42,13 +62,11 @@ async function generateGeminiContent(
   const modelsToTry = [primaryModel];
   
   if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
+    modelsToTry.push("gemini-3.1-flash-lite");
   } else if (primaryModel === "gemini-3.1-flash-lite") {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-pro-preview");
-  } else if (primaryModel === "gemini-3.1-pro-preview") {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite");
+    modelsToTry.push("gemini-3.8-flash");
   } else {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-3.1-pro-preview");
+    modelsToTry.push("gemini-3.8-flash", "gemini-3.1-flash-lite");
   }
 
   // Deduplicate model list to maintain clean sequential order
@@ -110,12 +128,12 @@ async function generateGeminiContent(
 // ----------------------------------------------------
 
 // Health Check API
-app.get("/api/health", (req, res) => {
+app.get(["/api/health", "/health"], (req, res) => {
   res.json({ status: "ok", time: new Date().toISOString() });
 });
 
 // Chart Analysis endpoint
-app.post("/api/analyze-chart", async (req: express.Request, res: express.Response): Promise<void> => {
+app.post(["/api/analyze-chart", "/analyze-chart"], async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice } = req.body;
 
@@ -199,7 +217,8 @@ app.post("/api/analyze-chart", async (req: express.Request, res: express.Respons
       silverBulletName = "New York PM Session Silver Bullet (2-3 PM EST)";
     }
 
-    const ai = getGeminiClient();
+    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
+    const ai = getGeminiClient(customKey);
 
     let reinforcementLearningPrompt = "";
     if (learnings && Array.isArray(learnings) && learnings.length > 0) {
@@ -426,7 +445,7 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
 });
 
 // AI Chat Bot endpoint with context awareness
-app.post("/api/chat-bot", async (req: express.Request, res: express.Response): Promise<void> => {
+app.post(["/api/chat-bot", "/chat-bot"], async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { prompt, history, currentAnalysis, tradeHistory, learnings, educationalMode, chartImage, activeSymbol } = req.body;
 
@@ -435,7 +454,8 @@ app.post("/api/chat-bot", async (req: express.Request, res: express.Response): P
       return;
     }
 
-    const ai = getGeminiClient();
+    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
+    const ai = getGeminiClient(customKey);
 
     // Prepare systemic constraints and inject collections data
     let companionDirective = `You are a legendary Synthetic Indices SMC (Smart Money Concepts) Elite Mentor and risk specialist Coach with deep expertise in Deriv-style synthetic markets: Volatility Indices (V75, V100), Boom/Crash Indices, Step Index, and Jump Indices.
@@ -559,7 +579,7 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
 });
 
 // Premium SVG / AI Generated Educational Image Route
-app.post("/api/generate-educational-image", async (req: express.Request, res: express.Response): Promise<void> => {
+app.post(["/api/generate-educational-image", "/generate-educational-image"], async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { subject, explanation } = req.body;
 
@@ -568,7 +588,8 @@ app.post("/api/generate-educational-image", async (req: express.Request, res: ex
       return;
     }
 
-    const ai = getGeminiClient();
+    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
+    const ai = getGeminiClient(customKey);
 
     // Ask Gemini text model to render a beautifully styled trade illustration SVG.
     // This allows custom, fully labeled charts without standard imagen quota blocks!
@@ -633,7 +654,7 @@ Use nice SVG tags, text boxes, and charts. Make it extremely visual and beautifu
 });
 
 // GitHub Auto-Sync API Endpoint
-app.post("/api/github-sync", async (req: express.Request, res: express.Response): Promise<void> => {
+app.post(["/api/github-sync", "/github-sync"], async (req: express.Request, res: express.Response): Promise<void> => {
   try {
     const { token, owner, repo, branch, commitMessage } = req.body;
 
@@ -687,11 +708,12 @@ async function mountFrontend() {
     });
   }
 
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`[Synthetics Analyzer] Service up and running in ${process.env.NODE_ENV || "development"} mode at: http://localhost:${PORT}`);
-    });
-  }
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[Synthetics Analyzer] Service up and running in ${process.env.NODE_ENV || "development"} mode at: http://localhost:${PORT}`);
+  });
 }
 
-mountFrontend();
+// Only mount local Vite/static server and listen to PORT when not in Vercel Serverless environment
+if (!process.env.VERCEL) {
+  mountFrontend();
+}
