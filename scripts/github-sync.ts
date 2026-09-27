@@ -91,7 +91,6 @@ export async function syncProjectToGitHub(options: SyncOptions) {
   }> = [];
 
   for (const relPath of allFiles) {
-    console.log(`[GitHub Sync] Uploading blob: ${relPath}`);
     const absPath = path.join(rootDir, relPath);
     const content = fs.readFileSync(absPath);
     const isBinary =
