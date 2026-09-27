@@ -20,7 +20,11 @@ import {
   TrendingUp,
   Sliders,
   Scale,
-  Eraser
+  Eraser,
+  Move,
+  ZoomIn,
+  ZoomOut,
+  Maximize2
 } from "lucide-react";
 import { saveTrade } from "../lib/db";
 
@@ -51,7 +55,13 @@ export default function InteractiveCanvas({
   const canvasHeight = 490;
 
   // Tools & custom choices
-  const [activeTool, setActiveTool] = useState<"free" | "rect" | "line" | "trendline" | "arrow" | "text" | "eraser" | "none">("none");
+  const [activeTool, setActiveTool] = useState<"free" | "rect" | "line" | "trendline" | "arrow" | "text" | "eraser" | "pan" | "none">("none");
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
+  const activeToolRef = useRef(activeTool);
+  useEffect(() => {
+    activeToolRef.current = activeTool;
+  }, [activeTool]);
+
   const [color, setColor] = useState<string>("#22d3ee"); // Default cyan accent
   const [opacity, setOpacity] = useState<number>(0.8);
   const [brushSize, setBrushSize] = useState<number>(3);
@@ -60,6 +70,64 @@ export default function InteractiveCanvas({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Zoom & Pan manipulation helpers
+  const handleResetZoom = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    canvas.setZoom(1);
+    setZoomLevel(1);
+    canvas.renderAll();
+  };
+
+  const handleZoomIn = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    let newZoom = canvas.getZoom() * 1.25;
+    if (newZoom > 5.0) newZoom = 5.0;
+    canvas.zoomToPoint(new fabric.Point(canvasWidth / 2, canvasHeight / 2), newZoom);
+    setZoomLevel(newZoom);
+  };
+
+  const handleZoomOut = () => {
+    const canvas = fabricCanvasRef.current;
+    if (!canvas) return;
+    let newZoom = canvas.getZoom() / 1.25;
+    if (newZoom < 0.8) newZoom = 0.8;
+    canvas.zoomToPoint(new fabric.Point(canvasWidth / 2, canvasHeight / 2), newZoom);
+    setZoomLevel(newZoom);
+  };
+
+  // Export pristine 1:1 image composite regardless of current active zoom or pan
+  const getPristineComposite = (canvas: fabric.Canvas, format: "png" | "jpeg" = "jpeg", quality: number = 0.95): string => {
+    const currentTransform = canvas.viewportTransform ? [...canvas.viewportTransform] : [1, 0, 0, 1, 0, 0];
+    const currentZoom = canvas.getZoom();
+
+    try {
+      canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      canvas.setZoom(1);
+      canvas.renderAll();
+
+      const dataUrl = canvas.toDataURL({
+        multiplier: 1,
+        format,
+        quality,
+      });
+
+      canvas.setViewportTransform(currentTransform as any);
+      canvas.setZoom(currentZoom);
+      canvas.renderAll();
+
+      return dataUrl;
+    } catch (e) {
+      console.warn("Canvas pristine export failed, restoring viewport:", e);
+      canvas.setViewportTransform(currentTransform as any);
+      canvas.setZoom(currentZoom);
+      canvas.renderAll();
+      return imageUrl || "";
+    }
+  };
 
   // Manual input override values (synchronized with drawn elements)
   const [entryPrice, setEntryPrice] = useState<number>(1000);
@@ -239,8 +307,93 @@ export default function InteractiveCanvas({
       }
     });
 
+    // 5. Desktop Wheel Zoom
+    canvas.on("mouse:wheel", (opt: any) => {
+      const evt = opt.e;
+      evt.preventDefault();
+      evt.stopPropagation();
+      const delta = evt.deltaY;
+      let zoom = canvas.getZoom();
+      zoom *= 0.999 ** delta;
+      if (zoom > 5.0) zoom = 5.0;
+      if (zoom < 0.8) zoom = 0.8;
+      canvas.zoomToPoint(new fabric.Point(evt.offsetX, evt.offsetY), zoom);
+      setZoomLevel(zoom);
+    });
+
+    // 6. Mobile & Tablet Pinch-to-Zoom & Two-Finger Pan
+    const upperCanvas = (canvas as any).upperCanvasEl as HTMLCanvasElement | undefined;
+    let initialTouchDist = 0;
+    let initialTouchZoom = 1;
+    let touchMidPoint = { x: 0, y: 0 };
+    let lastTouchX = 0;
+    let lastTouchY = 0;
+    let isTouchPanning = false;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        initialTouchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        initialTouchZoom = canvas.getZoom();
+        const rect = upperCanvas ? upperCanvas.getBoundingClientRect() : { left: 0, top: 0 };
+        touchMidPoint = {
+          x: (t1.clientX + t2.clientX) / 2 - rect.left,
+          y: (t1.clientY + t2.clientY) / 2 - rect.top,
+        };
+      } else if (e.touches.length === 1 && activeToolRef.current === "pan") {
+        e.preventDefault();
+        isTouchPanning = true;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && initialTouchDist > 0) {
+        e.preventDefault();
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const currentDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+        let newZoom = initialTouchZoom * (currentDist / initialTouchDist);
+        newZoom = Math.min(Math.max(newZoom, 0.8), 5.0);
+        canvas.zoomToPoint(new fabric.Point(touchMidPoint.x, touchMidPoint.y), newZoom);
+        setZoomLevel(newZoom);
+      } else if (e.touches.length === 1 && isTouchPanning) {
+        e.preventDefault();
+        const deltaX = e.touches[0].clientX - lastTouchX;
+        const deltaY = e.touches[0].clientY - lastTouchY;
+        canvas.relativePan(new fabric.Point(deltaX, deltaY));
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (e.touches.length < 2) {
+        initialTouchDist = 0;
+      }
+      if (e.touches.length === 0) {
+        isTouchPanning = false;
+      }
+    };
+
+    if (upperCanvas) {
+      upperCanvas.addEventListener("touchstart", handleTouchStart, { passive: false });
+      upperCanvas.addEventListener("touchmove", handleTouchMove, { passive: false });
+      upperCanvas.addEventListener("touchend", handleTouchEnd);
+      upperCanvas.addEventListener("touchcancel", handleTouchEnd);
+    }
+
     // Cleanup on destroy
     return () => {
+      if (upperCanvas) {
+        upperCanvas.removeEventListener("touchstart", handleTouchStart);
+        upperCanvas.removeEventListener("touchmove", handleTouchMove);
+        upperCanvas.removeEventListener("touchend", handleTouchEnd);
+        upperCanvas.removeEventListener("touchcancel", handleTouchEnd);
+      }
       canvas.dispose();
       fabricCanvasRef.current = null;
     };
@@ -251,7 +404,11 @@ export default function InteractiveCanvas({
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
 
-    if (activeTool === "free") {
+    if (activeTool === "pan") {
+      canvas.isDrawingMode = false;
+      canvas.defaultCursor = "grab";
+      canvas.selection = false;
+    } else if (activeTool === "free") {
       canvas.isDrawingMode = true;
       // Initialize free brush stylus
       canvas.freeDrawingBrush = new fabric.PencilBrush(canvas);
@@ -259,6 +416,7 @@ export default function InteractiveCanvas({
       canvas.freeDrawingBrush.width = brushSize;
     } else {
       canvas.isDrawingMode = false;
+      canvas.selection = true;
       // Change pointer cursor
       if (activeTool === "none") {
         canvas.defaultCursor = "default";
@@ -271,10 +429,24 @@ export default function InteractiveCanvas({
 
     // Set properties on click-and-drag shape listeners
     let isMouseDown = false;
+    let isPanning = false;
+    let lastPosX = 0;
+    let lastPosY = 0;
     let startPoint: fabric.Point | null = null;
     let tempObject: fabric.Object | null = null;
 
     const handleMouseDown = (options: any) => {
+      const e = options.e as MouseEvent;
+      // Support Pan mode or Alt-key or middle-button drag to pan
+      if (activeTool === "pan" || e.altKey || e.button === 1) {
+        isPanning = true;
+        canvas.defaultCursor = "grabbing";
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        canvas.selection = false;
+        return;
+      }
+
       if (activeTool === "free" || activeTool === "none") return;
       const pointer = canvas.getPointer(options.e);
 
@@ -354,6 +526,16 @@ export default function InteractiveCanvas({
     };
 
     const handleMouseMove = (options: any) => {
+      if (isPanning) {
+        const e = options.e as MouseEvent;
+        const deltaX = e.clientX - lastPosX;
+        const deltaY = e.clientY - lastPosY;
+        canvas.relativePan(new fabric.Point(deltaX, deltaY));
+        lastPosX = e.clientX;
+        lastPosY = e.clientY;
+        return;
+      }
+
       if (!isMouseDown || !startPoint || !tempObject) return;
       const pointer = canvas.getPointer(options.e);
 
@@ -375,6 +557,13 @@ export default function InteractiveCanvas({
     };
 
     const handleMouseUp = () => {
+      if (isPanning) {
+        isPanning = false;
+        canvas.defaultCursor = activeTool === "pan" ? "grab" : "default";
+        if (activeTool !== "pan") canvas.selection = true;
+        return;
+      }
+
       if (!isMouseDown) return;
       isMouseDown = false;
 
@@ -1309,17 +1498,8 @@ export default function InteractiveCanvas({
       if (canvas) {
         setRedoStack([]); // Initialize stack
         // Auto update parent save composite hook
-        try {
-          const dataUrl = canvas.toDataURL({
-            multiplier: 1,
-            format: "png",
-            quality: 0.92,
-          });
-          onSaveComposite(dataUrl);
-        } catch (e) {
-          console.warn("Canvas toDataURL failed or was tainted, falling back to original image:", e);
-          onSaveComposite(imageUrl || "");
-        }
+        const dataUrl = getPristineComposite(canvas, "png", 0.95);
+        onSaveComposite(dataUrl);
       }
     }, 200);
   };
@@ -1402,18 +1582,8 @@ export default function InteractiveCanvas({
   const updatePreviews = () => {
     const canvas = fabricCanvasRef.current;
     if (!canvas) return;
-
-    try {
-      const compositeUrl = canvas.toDataURL({
-        multiplier: 1,
-        format: "jpeg",
-        quality: 0.95,
-      });
-      onSaveComposite(compositeUrl);
-    } catch (e) {
-      console.warn("Canvas toDataURL failed or was tainted, falling back to original image:", e);
-      onSaveComposite(imageUrl || "");
-    }
+    const compositeUrl = getPristineComposite(canvas, "jpeg", 0.95);
+    onSaveComposite(compositeUrl);
   };
 
   // Undo last drawings
@@ -1484,17 +1654,8 @@ export default function InteractiveCanvas({
     setSaveStatus("saving");
     setErrorMessage(null);
 
-    // Export high-resolution annotated image composite
-    let compositeUrl = imageUrl || "";
-    try {
-      compositeUrl = canvas.toDataURL({
-        multiplier: 1,
-        format: "jpeg",
-        quality: 0.95,
-      });
-    } catch (e) {
-      console.warn("Canvas toDataURL failed or was tainted, falling back to original image:", e);
-    }
+    // Export high-resolution annotated image composite using pristine viewport
+    const compositeUrl = getPristineComposite(canvas, "jpeg", 0.95);
 
     try {
       const payload = {
@@ -1705,6 +1866,19 @@ export default function InteractiveCanvas({
             </button>
 
             <button
+              onClick={() => setActiveTool(activeTool === "pan" ? "none" : "pan")}
+              className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1.5 cursor-pointer ${
+                activeTool === "pan"
+                  ? "bg-amber-400 text-slate-950 px-3.5 font-extrabold shadow-md shadow-amber-400/25 ring-2 ring-amber-300"
+                  : "bg-slate-50 border border-slate-850 text-slate-700 hover:text-slate-900"
+              }`}
+              title="Pan / Move View (Click and drag chart to inspect SMC zones, or hold Alt / 2-finger pinch)"
+            >
+              <Move className="h-3.5 w-3.5 shrink-0" />
+              <span>Pan View</span>
+            </button>
+
+            <button
               onClick={() => setActiveTool("none")}
               className={`p-2.5 rounded-xl text-xs font-bold transition duration-150 flex items-center gap-1 cursor-pointer ${
                 activeTool === "none"
@@ -1871,6 +2045,65 @@ export default function InteractiveCanvas({
                 ref={canvasRef}
                 className="select-none block touch-none outline-none mx-auto bg-white"
               />
+
+              {/* FLOATING ZOOM & PAN HUD */}
+              <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 bg-[#0a0f1d]/90 backdrop-blur-md border border-cyan-500/40 p-1.5 rounded-xl shadow-2xl font-mono text-[11px] select-none">
+                <button
+                  type="button"
+                  onClick={() => setActiveTool(activeTool === "pan" ? "none" : "pan")}
+                  className={`p-1.5 px-2 rounded-lg text-xs transition cursor-pointer flex items-center gap-1 ${
+                    activeTool === "pan"
+                      ? "bg-amber-400 text-slate-950 font-bold"
+                      : "text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60"
+                  }`}
+                  title={activeTool === "pan" ? "Pan Active: Click & drag chart" : "Enable Pan tool (or hold Alt / use 2 fingers)"}
+                >
+                  <Move className="h-3.5 w-3.5" />
+                  <span className="text-[10px] hidden sm:inline">Pan</span>
+                </button>
+
+                <div className="h-4 w-px bg-slate-700/60"></div>
+
+                <button
+                  type="button"
+                  onClick={handleZoomOut}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition cursor-pointer"
+                  title="Zoom Out (Mouse Wheel Down)"
+                >
+                  <ZoomOut className="h-3.5 w-3.5" />
+                </button>
+
+                <span className="text-[10.5px] font-bold text-cyan-400 px-1 min-w-[42px] text-center">
+                  {Math.round(zoomLevel * 100)}%
+                </span>
+
+                <button
+                  type="button"
+                  onClick={handleZoomIn}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition cursor-pointer"
+                  title="Zoom In (Mouse Wheel Up / Two-Finger Pinch)"
+                >
+                  <ZoomIn className="h-3.5 w-3.5" />
+                </button>
+
+                <div className="h-4 w-px bg-slate-700/60"></div>
+
+                <button
+                  type="button"
+                  onClick={handleResetZoom}
+                  className="p-1.5 px-2 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60 transition cursor-pointer flex items-center gap-1 text-[10px]"
+                  title="Reset View to 100%"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  <span>1:1</span>
+                </button>
+              </div>
+
+              {/* Mobile / Gesture Help Badge */}
+              <div className="absolute top-3 right-3 z-10 hidden sm:flex items-center gap-1.5 bg-slate-900/75 backdrop-blur-sm border border-slate-700/60 px-2 py-1 rounded-lg text-[9.5px] text-slate-400 font-mono pointer-events-none">
+                <span className="text-cyan-400">💡 Tip:</span>
+                <span>Pinch or wheel to zoom • Drag in Pan mode to inspect SMC zones</span>
+              </div>
             </div>
 
             {/* TRADINGVIEW CYBER Y-AXIS SIDEBAR */}

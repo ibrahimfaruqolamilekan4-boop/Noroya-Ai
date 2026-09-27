@@ -21,7 +21,8 @@ import {
   MessageSquare,
   Sparkles,
   Activity,
-  Download
+  Download,
+  Code
 } from "lucide-react";
 import { SYNTHETIC_SYMBOLS, SyntheticSymbol } from "./data/symbols";
 import {
@@ -603,9 +604,18 @@ export default function App() {
               }`}
             >
               <Settings className="h-4 w-4" />
-              Database Control
+              Cloud DB &amp; GitHub Sync
             </button>
           </nav>
+
+          <button
+            onClick={() => setActiveTab("databases")}
+            className="px-3.5 py-2.5 text-xs font-bold rounded-xl border border-cyan-500/40 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-900/30 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-cyan-500/10"
+            title="Push updates to your GitHub repository and trigger Vercel deployment"
+          >
+            <Code className="h-4 w-4 text-cyan-400" />
+            <span className="hidden sm:inline font-mono">Push to GitHub</span>
+          </button>
 
           <button
             onClick={() => setChatSidebarOpen(!chatSidebarOpen)}
@@ -639,7 +649,7 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-700 uppercase tracking-widest mb-1.5 font-display">
-                      Synthetic Index Symbol
+                      Asset / Currency Pair / Synthetic Symbol
                     </label>
                     <select
                       value={symbol.ticker}
@@ -647,13 +657,29 @@ export default function App() {
                         const s = SYNTHETIC_SYMBOLS.find((x) => x.ticker === e.target.value);
                         if (s) setSymbol(s);
                       }}
-                      className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-xs transition"
+                      className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-xs transition font-mono font-medium"
                     >
-                      {SYNTHETIC_SYMBOLS.map((s) => (
-                        <option value={s.ticker} key={s.ticker}>
-                          {s.name}
-                        </option>
-                      ))}
+                      <optgroup label="Commodities & Forex">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Commodities").map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Crypto 24/7 Spot">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Crypto").map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Deriv Synthetic Indices">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category !== "Commodities" && s.category !== "Crypto").map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
                     </select>
                   </div>
 
@@ -674,6 +700,67 @@ export default function App() {
                     </select>
                   </div>
                 </div>
+
+                {/* Popular Quick-Select Asset Chips */}
+                <div className="mb-4">
+                  <span className="block text-[9.5px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-mono">
+                    Quick Select Pairs & Indices:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { ticker: "XAUUSD", label: "⭐ Gold (XAU/USD)", color: "text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
+                      { ticker: "BTCUSD", label: "⚡ Bitcoin (BTC/USD)", color: "text-orange-500 bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20" },
+                      { ticker: "V75", label: "🔥 Volatility 75", color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20" },
+                      { ticker: "CRASH1000", label: "💥 Crash 1000", color: "text-rose-500 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20" },
+                      { ticker: "BOOM1000", label: "🚀 Boom 1000", color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20" },
+                    ].map((item) => (
+                      <button
+                        key={item.ticker}
+                        type="button"
+                        onClick={() => {
+                          const target = SYNTHETIC_SYMBOLS.find((s) => s.ticker === item.ticker);
+                          if (target) setSymbol(target);
+                        }}
+                        className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                          symbol.ticker === item.ticker
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : item.color
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Specialized Pair Strategy Playbook Badge */}
+                {symbol.ticker === "XAUUSD" && (
+                  <div className="mb-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
+                    <div className="flex items-center gap-1.5 text-amber-600 font-bold text-[10px] uppercase tracking-wider">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                      <span>XAU/USD Gold Institutional SMC Playbook</span>
+                    </div>
+                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
+                      <li><strong className="text-slate-800">Asian Liquidity Sweeps:</strong> London Open (07:00–09:00 GMT) sweeps Asian range highs/lows into 15M/1H OBs.</li>
+                      <li><strong className="text-slate-800">Silver Bullet Windows:</strong> 03:00–04:00 AM &amp; 10:00–11:00 AM EST FVG entries.</li>
+                      <li><strong className="text-slate-800">Psychological Round Numbers:</strong> $10 &amp; $50 handles ($2600, $2650, $2700) act as high-edge magnets.</li>
+                    </ul>
+                  </div>
+                )}
+
+                {symbol.ticker === "BTCUSD" && (
+                  <div className="mb-4 bg-gradient-to-r from-orange-500/10 via-orange-500/5 to-transparent border border-orange-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
+                    <div className="flex items-center gap-1.5 text-orange-600 font-bold text-[10px] uppercase tracking-wider">
+                      <Sparkles className="h-3.5 w-3.5 text-orange-500" />
+                      <span>BTC/USD Bitcoin 24/7 SMC Playbook</span>
+                    </div>
+                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
+                      <li><strong className="text-slate-800">CME Weekend Gap:</strong> Friday close to Sunday open gap has 85%+ fill probability.</li>
+                      <li><strong className="text-slate-800">Monday Weekly AMD:</strong> Monday range setup -&gt; Tuesday manipulation sweep -&gt; Wed/Fri distribution.</li>
+                      <li><strong className="text-slate-800">Liquidation Cascades:</strong> Sweeping equal highs/lows on leverage into 1H/4H Breaker Blocks.</li>
+                    </ul>
+                  </div>
+                )}
 
                 <div className="mb-6">
                   <div className="flex justify-between items-center mb-1.5">

@@ -5,11 +5,31 @@ export interface SyntheticSymbol {
   lotStepValue: number; // point value of 1.0 lot moving 1 point in price
   pointMultiplier: number;
   description: string;
-  category: "Volatilities" | "Boom/Crash" | "Step" | "Jump" | "Range Break" | "Indices";
+  category: "Volatilities" | "Boom/Crash" | "Step" | "Jump" | "Range Break" | "Indices" | "Commodities" | "Crypto";
   defaultPrice: number;
 }
 
 export const SYNTHETIC_SYMBOLS: SyntheticSymbol[] = [
+  {
+    name: "Gold vs US Dollar (XAU/USD)",
+    ticker: "XAUUSD",
+    minLotSize: 0.01,
+    lotStepValue: 1.0,
+    pointMultiplier: 100.0,
+    description: "Spot Gold against US Dollar. Ultra-high liquidity SMC asset driven by London/NY Judas swings, Asian session range sweeps, CPI/NFP news prints, and institutional round psychological numbers ($2,600, $2,650, etc.).",
+    category: "Commodities",
+    defaultPrice: 2650.0,
+  },
+  {
+    name: "Bitcoin vs US Dollar (BTC/USD)",
+    ticker: "BTCUSD",
+    minLotSize: 0.01,
+    lotStepValue: 1.0,
+    pointMultiplier: 1.0,
+    description: "Bitcoin 24/7 spot crypto market. Dominated by weekend CME gap fills, funding rate liquidation cascades, Asian session high/low sweeps, and Monday weekly open power-of-3 (AMD) expansion.",
+    category: "Crypto",
+    defaultPrice: 65000.0,
+  },
   {
     name: "Volatility 10 Index",
     ticker: "V10",

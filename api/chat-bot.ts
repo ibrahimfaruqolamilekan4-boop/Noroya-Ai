@@ -98,10 +98,13 @@ export default async function handler(req: any, res: any) {
     const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
     const ai = getGeminiClient(customKey);
 
-    let companionDirective = `You are a legendary Synthetic Indices SMC (Smart Money Concepts) Elite Mentor and risk specialist Coach with deep expertise in Deriv-style synthetic markets: Volatility Indices (V75, V100), Boom/Crash Indices, Step Index, and Jump Indices.
+    let companionDirective = `You are a legendary SMC (Smart Money Concepts) Elite Mentor and risk specialist Coach with deep expertise across:
+1. Gold vs US Dollar (XAU/USD): Asian range liquidity sweeps, London Judas swings, London & NY AM Silver Bullet (03:00-04:00 & 10:00-11:00 AM EST), institutional round numbers ($2600, $2650), CPI/NFP news handling, and order block wicks.
+2. Bitcoin vs US Dollar (BTC/USD): CME Futures gap fills (85%+ probability), weekend range liquidity engineering, Monday weekly open Power of 3 (AMD), funding rate liquidation cascade sweeps into 1H/4H order blocks.
+3. Deriv Synthetic Indices: Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices.
 Provide professional, crisp, and high-value trading advice. Encourage strict risk management (1-2% rule).
 
-The active index currently selected on screen is: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General/Unspecified"}.
+The active asset currently selected on screen is: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General/Unspecified"}.
 `;
 
     if (educationalMode) {

@@ -35,10 +35,10 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
-  // GitHub Auto-Sync states
-  const [ghToken, setGhToken] = useState("");
-  const [ghOwner, setGhOwner] = useState("");
-  const [ghRepo, setGhRepo] = useState("");
+  // GitHub Auto-Sync states with persistent localStorage storage
+  const [ghToken, setGhToken] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_token") || "" : ""));
+  const [ghOwner, setGhOwner] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_owner") || "ibrahimfaruqolamilekan4-boop" : "ibrahimfaruqolamilekan4-boop"));
+  const [ghRepo, setGhRepo] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_repo") || "Noroya-Ai" : "Noroya-Ai"));
   const [ghBranch, setGhBranch] = useState("main");
   const [ghLoading, setGhLoading] = useState(false);
   const [ghResult, setGhResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -118,6 +118,11 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
     }
     setGhLoading(true);
     setGhResult(null);
+    if (typeof window !== "undefined") {
+      if (ghToken) localStorage.setItem("custom_gh_token", ghToken);
+      if (ghOwner) localStorage.setItem("custom_gh_owner", ghOwner);
+      if (ghRepo) localStorage.setItem("custom_gh_repo", ghRepo);
+    }
     try {
       const customKey = localStorage.getItem("custom_gemini_api_key") || "";
       const res = await fetch(`/api/github-sync?_t=${Date.now()}`, {
@@ -385,9 +390,22 @@ CREATE TABLE IF NOT EXISTS trades (
                 placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
                 value={ghToken}
                 onChange={(e) => setGhToken(e.target.value)}
-                className="w-true w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500 font-mono"
               />
-              <p className="text-[10px] text-slate-500 mt-1">Needs `repo` or `public_repo` scope permissions.</p>
+              <div className="flex flex-col gap-1 mt-1">
+                <p className="text-[10.5px] text-slate-500">
+                  Requires a Classic Token starting with <code className="text-cyan-600 font-bold">ghp_</code> with <code className="text-cyan-600 font-bold">repo</code> scope checked.
+                </p>
+                <a
+                  href="https://github.com/settings/tokens/new?scopes=repo&description=Noroya-Ai-Sync"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[10.5px] text-indigo-600 hover:text-indigo-700 underline font-medium flex items-center gap-1"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Generate New GitHub Token (repo scope pre-checked)
+                </a>
+              </div>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-700 mb-1">GitHub Username / Organization</label>

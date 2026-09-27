@@ -205,10 +205,24 @@ Look closely at the candle wicks, trend direction, order blocks, vacuums, voids,
 ${reinforcementLearningPrompt}
 
 CRITICAL ANALYSIS INSTRUCTIONS:
-1. DERIV SYNTHETIC INDICES KNOWLEDGE:
-   - Volatility Indices (especially V75): Constant high volatility, clean trends & retracements.
-   - Boom/Crash Indices: Long calm periods + sudden violent spikes.
-   - 24/7 market, fixed algorithmic volatility, best during 07:00–16:00 GMT. V75 is the most popular for SMC due to balanced, high-precision movement.
+1. ASSET-SPECIFIC INSTITUTIONAL SMC KNOWLEDGE:
+   - GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
+     * Asian Session Range Liquidity Sweeps: Asian range (00:00–06:00 GMT) establishes clean equal highs/lows. London Open (07:00–09:00 GMT / 02:00–04:00 AM EST) Judas Swing aggressively sweeps the Asian range high or low, traps retail breakout traders, then delivers price into an unmitigated 15M/1H institutional Order Block.
+     * New York Kill Zone & Macro Volatility: 08:30 AM EST (CPI, NFP, PPI) and 10:00 AM EST high-impact releases engineer aggressive displacement wicks. Never chase the initial news spike; execute on the subsequent FVG rebalance and institutional mitigation block.
+     * Institutional Round Psychological Numbers: Key reactions cluster around psychological levels ($10, $50, and $100 levels like $2,600, $2,650, $2,700). High probability limit entries occur at confluences between an Order Block and a round level.
+     * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
+     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level.
+
+   - BITCOIN (BTC/USD) 24/7 CRYPTO SMC PLAYBOOK:
+     * CME Bitcoin Futures Gap Fills: Gaps formed between Friday 17:00 EST close and Sunday 18:00 EST open act as powerful institutional magnets, with over 85% probability of being rebalanced during early week sessions.
+     * Weekend Range Liquidity Engineering: Weekend consolidations build massive buy-side and sell-side liquidity pools. Sunday midnight or Monday London/NY session triggers violent manipulation sweeps (Judas swings) into deep discount zones before weekly expansion.
+     * Monday Weekly Open Power of 3 (AMD): Monday sets initial reference high/low. Tuesday manipulates against trend to engineer stop runs. Wednesday through Friday distributes toward institutional HTF targets.
+     * Funding Rate & Liquidation Cascade Sweeps: Aggressive wick rejections below equal lows or above equal highs trigger cascading liquidations on leverage, delivering price into pristine 1H/4H Breaker Blocks or Order Blocks.
+
+   - DERIV SYNTHETIC INDICES KNOWLEDGE:
+     * Volatility Indices (especially V75, V100): High continuous algorithmic volatility, clean structural trends, pristine Fair Value Gaps and order block reactions.
+     * Boom/Crash Indices: Steady stair-step trends with explosive opposite-direction tick spikes.
+     * 24/7 algorithmic execution, unaffected by real-world news prints. V75 is preferred for SMC due to balanced, high-precision movement.
 
 2. MULTI-TIMEFRAME ANALYSIS:
    When user uploads 3 images:
