@@ -659,7 +659,21 @@ export default function App() {
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-xs transition font-mono font-medium"
                     >
-                      <optgroup label="Commodities & Forex">
+                      <optgroup label="Forex Major Currency Pairs">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Forex" && ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker)).map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Forex Cross Currency Pairs">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Forex" && !["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker)).map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Commodities & Precious Metals">
                         {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Commodities").map((s) => (
                           <option value={s.ticker} key={s.ticker}>
                             {s.name}
@@ -673,8 +687,15 @@ export default function App() {
                           </option>
                         ))}
                       </optgroup>
+                      <optgroup label="Global Stock Indices">
+                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Indices").map((s) => (
+                          <option value={s.ticker} key={s.ticker}>
+                            {s.name}
+                          </option>
+                        ))}
+                      </optgroup>
                       <optgroup label="Deriv Synthetic Indices">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category !== "Commodities" && s.category !== "Crypto").map((s) => (
+                        {SYNTHETIC_SYMBOLS.filter((s) => !["Forex", "Commodities", "Crypto", "Indices"].includes(s.category)).map((s) => (
                           <option value={s.ticker} key={s.ticker}>
                             {s.name}
                           </option>
@@ -708,11 +729,12 @@ export default function App() {
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {[
+                      { ticker: "EURUSD", label: "💶 EUR/USD", color: "text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20" },
+                      { ticker: "GBPUSD", label: "💷 GBP/USD", color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20" },
+                      { ticker: "USDJPY", label: "💴 USD/JPY", color: "text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500/20" },
                       { ticker: "XAUUSD", label: "⭐ Gold (XAU/USD)", color: "text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
                       { ticker: "BTCUSD", label: "⚡ Bitcoin (BTC/USD)", color: "text-orange-500 bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20" },
                       { ticker: "V75", label: "🔥 Volatility 75", color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20" },
-                      { ticker: "CRASH1000", label: "💥 Crash 1000", color: "text-rose-500 bg-rose-500/10 border-rose-500/30 hover:bg-rose-500/20" },
-                      { ticker: "BOOM1000", label: "🚀 Boom 1000", color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20" },
                     ].map((item) => (
                       <button
                         key={item.ticker}
@@ -734,6 +756,21 @@ export default function App() {
                 </div>
 
                 {/* Specialized Pair Strategy Playbook Badge */}
+                {symbol.category === "Forex" && (
+                  <div className="mb-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent border border-blue-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
+                    <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[10px] uppercase tracking-wider">
+                      <Sparkles className="h-3.5 w-3.5 text-blue-500" />
+                      <span>{symbol.name} Institutional SMC &amp; Anti-Stop-Loss Engine</span>
+                    </div>
+                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
+                      <li><strong className="text-slate-800">Anti-SL Hunting Rule:</strong> Stop loss must be placed strictly behind the structural displacement candle origin + 4-6 pip buffer (never at equal highs/lows where banks hunt liquidity).</li>
+                      <li><strong className="text-slate-800">Session Killzones &amp; Judas Swing:</strong> London Open (02:00–05:00 EST) false manipulation sweep of Asian high/low before true institutional trend. NY AM Silver Bullet (10:00–11:00 EST).</li>
+                      <li><strong className="text-slate-800">Premium vs. Discount 50% Rule:</strong> Only buy in deep Discount (&lt;50% of dealing range at 0.618–0.786 OTE); only sell in Premium (&gt;50%).</li>
+                      <li><strong className="text-slate-800">SMT Divergence:</strong> Cross-check correlation cracks (EUR/USD vs GBP/USD / DXY). Stand aside 15 mins before/after red-folder news (CPI, NFP, FOMC).</li>
+                    </ul>
+                  </div>
+                )}
+
                 {symbol.ticker === "XAUUSD" && (
                   <div className="mb-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
                     <div className="flex items-center gap-1.5 text-amber-600 font-bold text-[10px] uppercase tracking-wider">
@@ -1503,6 +1540,36 @@ export default function App() {
                           <p className="text-xs text-slate-600 mt-1 leading-relaxed bg-slate-50 border border-slate-200 rounded-xl p-3">{analysisResult?.tradeSetup?.rationale || "No specific trigger rationale provided."}</p>
                         </div>
                       </div>
+
+                      {/* ANTI-STOP-LOSS SHIELD PROTECTION */}
+                      {analysisResult?.antiStopLossShield && (
+                        <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-cyan-500/5 to-transparent border border-emerald-500/30 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                              <span className="text-xs font-bold text-slate-900 font-display uppercase tracking-wider">
+                                Institutional Anti-Stop-Loss Shield Active
+                              </span>
+                            </div>
+                            <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-emerald-700">
+                              {analysisResult.antiStopLossShield.dealingRangePosition || "DISCOUNT_OTE"}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-mono pt-1">
+                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                              <span className="text-slate-500 block text-[9.5px]">Structural Invalidation:</span>
+                              <span className="text-slate-900 font-bold">{analysisResult.antiStopLossShield.structuralInvalidationPrice || "N/A"}</span>
+                            </div>
+                            <div className="bg-slate-50 p-2 rounded-lg border border-slate-200">
+                              <span className="text-slate-500 block text-[9.5px]">Stop Hunt Protection Buffer:</span>
+                              <span className="text-emerald-700 font-bold">+{analysisResult.antiStopLossShield.bufferPipsApplied || "4-6"} Pips Applied</span>
+                            </div>
+                          </div>
+                          <p className="text-[10.5px] text-slate-600 leading-relaxed italic">
+                            🛡️ {analysisResult.antiStopLossShield.protectionRationale || "Stop Loss placed safely behind structural displacement origin + buffer rather than obvious retail swing wick to avoid stop hunts."}
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* SILVER BULLET STRATEGY ZONE STATUS */}

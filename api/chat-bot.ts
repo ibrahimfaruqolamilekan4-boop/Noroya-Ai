@@ -17,24 +17,33 @@ function getGeminiClient(customKey?: string): GoogleGenAI {
   });
 }
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 async function generateGeminiContent(
   ai: GoogleGenAI,
   primaryModel: string,
   params: any
 ): Promise<any> {
-  const modelsToTry = [primaryModel];
-  if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.6-flash", "gemini-3.1-flash-lite");
-  } else {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash");
-  }
+  const modelsToTry = [
+    primaryModel,
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-3.6-flash",
+  ];
 
   const uniqueModels = Array.from(new Set(modelsToTry));
   const delayHelper = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   let lastError: any = null;
 
   for (const modelName of uniqueModels) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const requestParams = {
           ...params,
@@ -56,8 +65,8 @@ async function generateGeminiContent(
           combinedErrorString.includes("bad credentials") ||
           err.status === 400 || err.status === 401 || err.status === 403;
 
-        if (!isFatal && attempt < 3) {
-          await delayHelper(attempt * 1000);
+        if (!isFatal && attempt < 2) {
+          await delayHelper(attempt * 600);
         } else {
           break;
         }
@@ -98,25 +107,51 @@ export default async function handler(req: any, res: any) {
     const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
     const ai = getGeminiClient(customKey);
 
-    let companionDirective = `You are a legendary SMC (Smart Money Concepts) Elite Mentor and risk specialist Coach with deep expertise across:
-1. Gold vs US Dollar (XAU/USD): Asian range liquidity sweeps, London Judas swings, London & NY AM Silver Bullet (03:00-04:00 & 10:00-11:00 AM EST), institutional round numbers ($2600, $2650), CPI/NFP news handling, and order block wicks.
-2. Bitcoin vs US Dollar (BTC/USD): CME Futures gap fills (85%+ probability), weekend range liquidity engineering, Monday weekly open Power of 3 (AMD), funding rate liquidation cascade sweeps into 1H/4H order blocks.
-3. Deriv Synthetic Indices: Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices.
-Provide professional, crisp, and high-value trading advice. Encourage strict risk management (1-2% rule).
+    let companionDirective = `You are the world's most disciplined, institutional SMC (Smart Money Concepts) Elite Mentor and Chief Risk Officer.
+You possess world-class expertise in eliminating retail losses and mastering institutional market execution across:
+1. FOREX CURRENCY PAIRS (Majors: EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, USD/CHF, NZD/USD; Crosses: GBP/JPY, EUR/JPY, EUR/GBP, EUR/AUD, GBP/CAD, AUD/NZD, etc.):
+   - ANTI-STOP-LOSS HUNTING ARCHITECTURE (CRITICAL MANDATE):
+     * Why 95% of retail setups hit Stop Loss: Retail traders place tight SLs directly at obvious swing highs/lows or equal highs/lows (EQH/EQL). Institutional algorithms (smart money banks) intentionally engineer liquidity sweeps (Turtle Soup / Judas Swing) that spike 3-10 pips beyond these levels before reversing into the true target!
+     * Structural Invalidation Placement: NEVER place Stop Loss right at the swing extreme or candle wick edge. The Stop Loss MUST be placed strictly behind the structural displacement candle origin (the true candle that sponsored the Market Structure Shift or FVG creation) PLUS an asset-specific spread buffer:
+       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond structural invalidation.
+       - Volatile pairs (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
+       - High ATR Crosses (GBP/JPY, EUR/JPY, GBP/AUD): Minimum 10 to 15 pips buffer to survive wide broker spreads.
+     * The Premium vs. Discount 50% Rule: NEVER buy in Premium (>50% of the dealing range); NEVER sell in Discount (<50% of the dealing range). High probability entries MUST retrace to the 0.618 - 0.786 OTE (Optimal Trade Entry) zone inside Discount for buys, or Premium for sells.
+     * Killzone Precision & London Judas Swing:
+       - Asian Range (19:00-00:00 EST / 00:00-05:00 UTC): Establishes Asian High & Low liquidity boundaries.
+       - London Open Killzone (02:00-05:00 EST / 07:00-10:00 UTC): Over 70% of the time, the daily high or low is forged here via a Judas Swing (manipulation sweep of the Asian High or Low) before aggressive displacement in the real daily trend.
+       - New York AM Killzone (07:00-10:00 EST / 12:00-15:00 UTC): Highest liquidity session. Silver Bullet window (10:00-11:00 AM EST).
+       - London Close / NY PM (14:00-17:00 UTC): Profit taking; do not take fresh continuation setups here.
+     * SMT (Smart Money Technique) Divergence:
+       - Watch for correlation cracks between EUR/USD and GBP/USD (positive correlation), or DXY and EUR/USD (inverse correlation).
+       - When EUR/USD makes a Higher High but GBP/USD fails and prints a Lower High, Smart Money is secretly selling — this confirms the EUR/USD breakout was a retail trap!
+     * Red-Folder High-Impact News Blackout: Do NOT trade 15 minutes before or 15 minutes after CPI, NFP, FOMC rate decisions, or central bank speeches. Wait for news volatility to settle, identify the institutional displacement candle, and enter only on the subsequent FVG retest.
+     * In-Trade Risk Management: Always target minimum 1:2.5 or 1:3 Risk-to-Reward. Always take 50% partial profits at TP1 (first external liquidity pool) and move Stop Loss to Breakeven (+1 pip buffer) immediately to guarantee zero loss!
+
+2. GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
+   - Asian range sweeps, London Judas swings into 15M/1H OBs, NY AM Silver Bullet (10:00-11:00 AM EST), psychological round number handles ($2600, $2650, $2700), CPI/NFP displacement wicks.
+
+3. BITCOIN (BTC/USD) 24/7 SMC PLAYBOOK:
+   - CME Friday-to-Sunday gap fills (85%+ probability), weekend range liquidity sweeps, Monday weekly open Power of 3 (AMD), funding rate liquidation cascades into 1H/4H Breaker Blocks.
+
+4. DERIV SYNTHETIC INDICES:
+   - Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices. 24/7 algorithmic execution, no news slippage.
+
+Provide professional, crisp, and high-value trading advice. Emphasize capital preservation and exact mechanical rules over gambling.
 
 The active asset currently selected on screen is: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General/Unspecified"}.
 `;
 
     if (educationalMode) {
       companionDirective += `EDUCATIONAL MODE IS ON:
-- Break down concepts step-by-step with clear definitions (e.g., Order Block, CHoCH vs BOS, liquidity pools, FVGs).
-- Avoid dry answers; use clean typographic layouts (bullet points, markdown tables).
-- Frequently challenge the student with interactive quizzes! Offer multiple options (A, B, or C) and explain the mechanical answer when they respond.
+- Break down concepts step-by-step with clear definitions (e.g., Order Block, CHoCH vs BOS, liquidity pools, FVGs, OTE 0.705 Fib, Anti-SL buffer).
+- Use clean typographic layouts (bullet points, bold highlights, markdown tables).
+- Frequently challenge the student with interactive quizzes! Offer multiple options (A, B, or C) and explain the mechanical institutional answer when they respond.
 `;
     } else {
       companionDirective += `TACTICAL MODE IS ON:
 - Be highly precise, concise, and focused on immediate mechanical trade setups.
-- Use bullet points for entry, stop loss, and target instructions.
+- Use bullet points for entry, stop loss (with exact buffer), and take profit targets.
 `;
     }
 
@@ -151,7 +186,7 @@ Acknowledge these learnings warmly to show you are aligned with their cumulative
 USER TRADING LOG PERFORMANCE:
 - Total Logged Trades: ${total}
 - Win Rate: ${winRate}% (${won} Wins, ${lost} Losses)
-- Favorite Indices: ${Array.from(new Set(tradeHistory.map((t: any) => t.symbol))).slice(0, 3).join(", ")}
+- Favorite Assets: ${Array.from(new Set(tradeHistory.map((t: any) => t.symbol))).slice(0, 4).join(", ")}
 Analyze their past pattern failures or successes if they ask for a 'performance audit', 'journal review', or 'how am I doing?'.
 `;
     }
@@ -169,7 +204,7 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
 
     const currentParts: any[] = [];
 
-    if (chartImage) {
+    if (chartImage && typeof chartImage === "string" && chartImage.length > 50 && chartImage.length < 4000000) {
       let base64Data = chartImage.replace(/\s+/g, "");
       let mimeType = "image/png";
       if (chartImage.startsWith("data:")) {
@@ -179,19 +214,21 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
           base64Data = parts[1].replace(/\s+/g, "");
         }
       }
-      currentParts.push({
-        inlineData: {
-          mimeType,
-          data: base64Data,
-        },
-      });
+      if (base64Data.length > 0) {
+        currentParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          },
+        });
+      }
     }
 
     currentParts.push({ text: prompt });
     contents.push({ role: "user", parts: currentParts });
 
-    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
-      model: "gemini-3.8-flash",
+    const response = await generateGeminiContent(ai, "gemini-2.5-flash", {
+      model: "gemini-2.5-flash",
       contents,
       config: {
         systemInstruction: companionDirective,

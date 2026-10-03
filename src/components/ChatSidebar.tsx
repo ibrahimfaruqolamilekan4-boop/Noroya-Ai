@@ -134,12 +134,18 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
     setMessages(prev => [...prev, userMsg]);
     setIsSending(true);
 
-    // Save user message to Firestore if logged in
-    await saveChatMessage(queryStr, "user");
+    // Save user message to Firestore asynchronously without blocking chat response
+    saveChatMessage(queryStr, "user").catch((e) => console.warn("Firestore save message error:", e));
 
     try {
       // Fetch user understandings
-      const plainLearnings = learnings.map(l => l.learnings);
+      const plainLearnings = learnings.map((l) => l.learnings);
+
+      // Only attach chart image if reasonably sized (< 1.5MB) to prevent Vercel/network 413 drops
+      let safeChartImage: string | null = null;
+      if (currentAnalysis?.image_url && typeof currentAnalysis.image_url === "string" && currentAnalysis.image_url.length < 1500000) {
+        safeChartImage = currentAnalysis.image_url;
+      }
 
       // Call Chat-Bot API
       const customKey = localStorage.getItem("custom_gemini_api_key") || "";
@@ -150,52 +156,53 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
           "Content-Type": "application/json",
           "Cache-Control": "no-cache, no-store, must-revalidate",
           "Pragma": "no-cache",
-          ...(customKey ? { "x-gemini-key": customKey } : {})
+          ...(customKey ? { "x-gemini-key": customKey } : {}),
         },
         body: JSON.stringify({
           prompt: queryStr,
-          history: messages.slice(-10).map(m => ({
+          history: messages.slice(-10).map((m) => ({
             role: m.sender === "user" ? "user" : "model",
-            parts: [{ text: m.message }]
+            parts: [{ text: m.message }],
           })),
           currentAnalysis: currentAnalysis || null,
           tradeHistory: tradeHistory || [],
           learnings: plainLearnings,
           educationalMode,
-          chartImage: currentAnalysis?.image_url || null,
-          activeSymbol: activeSymbol || null
-        })
+          chartImage: safeChartImage,
+          activeSymbol: activeSymbol || null,
+        }),
       });
 
       const parsed = await res.json();
       if (!res.ok || !parsed.success) {
-        throw new Error(parsed.error || "Copilot response failed.");
+        throw new Error(parsed.error || `Copilot response failed (${res.status})`);
       }
 
-      const botReply = parsed.data;
+      const botReply = parsed.data || "I analyzed your question, but could not produce a response.";
 
       const botMsg: ChatMessage = {
         id: Math.random().toString(),
         userId: "bot",
         sender: "bot",
         message: botReply,
-        created_at: new Date()
+        created_at: new Date(),
       };
 
-      setMessages(prev => [...prev, botMsg]);
-      await saveChatMessage(botReply, "bot");
-
+      setMessages((prev) => [...prev, botMsg]);
+      saveChatMessage(botReply, "bot").catch((e) => console.warn("Firestore save bot reply error:", e));
     } catch (err: any) {
-      console.error(err);
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(),
-        userId: "bot",
-        sender: "bot",
-        message: `⚠️ Connection drop: ${err.message || 'Please verify dev server connection.'}`,
-        created_at: new Date()
-      }]);
+      console.error("AI Copilot request error:", err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(),
+          userId: "bot",
+          sender: "bot",
+          message: `⚠️ Connection notice: ${err.message || "Please check your network connection or verify GEMINI_API_KEY in Settings."}`,
+          created_at: new Date(),
+        },
+      ]);
     } finally {
-      setIsSending(true);
       setIsSending(false);
     }
   };
@@ -388,22 +395,34 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               {educationalMode && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   <button
-                    onClick={() => handleSendMessage(undefined, "Quiz me about Boom / Crash indices spike mitigation")}
-                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-indigo-300 font-bold rounded-full transition cursor-pointer"
+                    onClick={() => handleSendMessage(undefined, "How do I prevent my Stop Loss from getting hunted/swept on currency pairs?")}
+                    className="p-1 px-2.5 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-[10px] text-rose-500 font-bold rounded-full transition cursor-pointer"
                   >
-                    ⚡ Take SMC Spike Quiz
+                    🛡️ Stop Loss Protection Guide
                   </button>
                   <button
-                    onClick={() => handleSendMessage(undefined, "Explain what a Fair Value Gap (FVG) represents")}
-                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-cyan-300 font-bold rounded-full transition cursor-pointer"
+                    onClick={() => handleSendMessage(undefined, "Explain EUR/USD London Judas Swing manipulation and Asian liquidity sweeps")}
+                    className="p-1 px-2.5 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-[10px] text-blue-500 font-bold rounded-full transition cursor-pointer"
                   >
-                    📖 Explain FVG
+                    💶 London Judas Swing (Forex)
+                  </button>
+                  <button
+                    onClick={() => handleSendMessage(undefined, "What is SMT Divergence between EUR/USD and GBP/USD and how does it spot traps?")}
+                    className="p-1 px-2.5 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-[10px] text-indigo-500 font-bold rounded-full transition cursor-pointer"
+                  >
+                    ⚡ SMT Divergence Mastery
                   </button>
                   <button
                     onClick={() => handleSendMessage(undefined, "Explain the exact structural difference between BOS and CHoCH")}
-                    className="p-1 px-2.5 bg-slate-100 border border-slate-850 hover:bg-slate-200 text-[10px] text-amber-400 font-bold rounded-full transition cursor-pointer"
+                    className="p-1 px-2.5 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-[10px] text-amber-500 font-bold rounded-full transition cursor-pointer"
                   >
                     ❓ BOS vs CHoCH differences
+                  </button>
+                  <button
+                    onClick={() => handleSendMessage(undefined, "Explain what a Fair Value Gap (FVG) represents and how to enter on OTE 0.705")}
+                    className="p-1 px-2.5 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-[10px] text-cyan-600 font-bold rounded-full transition cursor-pointer"
+                  >
+                    📖 FVG &amp; OTE 0.705 Entry
                   </button>
                 </div>
               )}

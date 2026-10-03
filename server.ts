@@ -256,12 +256,40 @@ ${reinforcementLearningPrompt}
  
 CRITICAL ANALYSIS INSTRUCTIONS:
 1. ASSET-SPECIFIC INSTITUTIONAL SMC KNOWLEDGE:
+   - FOREX CURRENCY PAIRS INSTITUTIONAL PLAYBOOK & ANTI-STOP-LOSS ENGINE:
+     * THE #1 REASON SETUPS HIT STOP LOSS (ANTI-SL HUNTING MANDATE):
+       Retail traders place their Stop Loss directly on obvious swing highs, swing lows, or equal highs/lows (EQH/EQL). Institutional algorithms (banks and market makers) intentionally engineer liquidity sweeps (Judas Swing / Turtle Soup / 3-Drive Liquidity Run) that probe 3 to 10 pips past these levels before expanding toward the actual target!
+     * STRUCTURAL INVALIDATION STOP LOSS PLACEMENT:
+       Never place the Stop Loss right at the swing extreme or Order Block wick edge.
+       The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the candle that broke structure or formed the FVG) PLUS an asset-specific spread & volatility buffer:
+       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond the structural invalidation point.
+       - High volatility majors (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
+       - Cross pairs (GBP/JPY, EUR/JPY, EUR/AUD, GBP/CAD): Minimum 10 to 15 pips buffer to absorb aggressive spread widening.
+       If the required safe structural Stop Loss makes the Risk:Reward less than 1:2.5, DO NOT tighten the SL into the sweep zone; instead, calculate a deeper limit entry at OTE (0.705/0.786 Fib) inside Discount/Premium, or set tradeSetup.type to "WAIT".
+     * STRICT 50% DEALING RANGE RULE (PREMIUM VS DISCOUNT):
+       - NEVER suggest a BUY in Premium (>50% equilibrium of the dealing range). Longs MUST be taken in deep Discount (<50%), ideally at 0.618 - 0.786 Optimal Trade Entry (OTE).
+       - NEVER suggest a SELL in Discount (<50% equilibrium of the dealing range). Shorts MUST be taken in deep Premium (>50%).
+     * SESSION KILLZONES & LONDON JUDAS SWINGS:
+       - Asian Session Range (19:00–00:00 EST / 00:00–05:00 UTC): Establishes the Asian High and Asian Low liquidity boundaries.
+       - London Open Killzone (02:00–05:00 EST / 07:00–10:00 UTC): Over 70% of the time, the daily high or low is formed here. The London Judas Swing manipulates price by sweeping the Asian High or Low, traps breakout traders, mitigates an HTF Order Block, and then displaces in the true daily trend direction.
+       - New York AM Killzone (07:00–10:00 EST / 12:00–15:00 UTC): High volatility institutional order flow. Silver Bullet window (10:00–11:00 AM EST) with clean FVG rebalances.
+       - London Close / NY PM (14:00–17:00 UTC): Institutional profit taking. Stand aside from new trend continuation entries.
+     * SMT (SMART MONEY TECHNIQUE) DIVERGENCE:
+       - Track correlation cracks between positively correlated pairs (EUR/USD vs GBP/USD) or inversely correlated assets (DXY vs EUR/USD).
+       - When EUR/USD makes a Higher High but GBP/USD fails and forms a Lower High, Smart Money is distributing — the EUR/USD high is a retail trap, expect a sharp reversal downward!
+       - When EUR/USD makes a Lower Low but GBP/USD forms a Higher Low, Smart Money is accumulating — expect a sharp reversal upward!
+     * RED-FOLDER HIGH-IMPACT NEWS RISK (CPI, NFP, FOMC, Rate Decisions):
+       - Never enter within 15 minutes before or after red-folder news. News candles cause spread blowouts and dual-sided liquidity spikes. Wait for the post-news displacement candle, identify the new Fair Value Gap, and enter on the retest.
+     * IN-TRADE RISK MANAGEMENT:
+       - Minimum 1:2.5 or 1:3 Risk-to-Reward ratio required.
+       - Take 50% partial profits at TP1 (first external liquidity pool) and immediately move Stop Loss to Breakeven (+1 pip buffer) to eliminate 100% of risk.
+
    - GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
      * Asian Session Range Liquidity Sweeps: Asian range (00:00–06:00 GMT) establishes clean equal highs/lows. London Open (07:00–09:00 GMT / 02:00–04:00 AM EST) Judas Swing aggressively sweeps the Asian range high or low, traps retail breakout traders, then delivers price into an unmitigated 15M/1H institutional Order Block.
      * New York Kill Zone & Macro Volatility: 08:30 AM EST (CPI, NFP, PPI) and 10:00 AM EST high-impact releases engineer aggressive displacement wicks. Never chase the initial news spike; execute on the subsequent FVG rebalance and institutional mitigation block.
      * Institutional Round Psychological Numbers: Key reactions cluster around psychological levels ($10, $50, and $100 levels like $2,600, $2,650, $2,700). High probability limit entries occur at confluences between an Order Block and a round level.
      * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
-     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level.
+     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level with $2.50 to $3.50 buffer.
 
    - BITCOIN (BTC/USD) 24/7 CRYPTO SMC PLAYBOOK:
      * CME Bitcoin Futures Gap Fills: Gaps formed between Friday 17:00 EST close and Sunday 18:00 EST open act as powerful institutional magnets, with over 85% probability of being rebalanced during early week sessions.
@@ -326,6 +354,12 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
   "marketStructure": "A brief structural description (e.g. Bullish Break of Structure (BOS) on H1, Liquidity swept, or Bearish CHoCH)",
   "confluenceScore": 3.0,
+  "antiStopLossShield": {
+    "structuralInvalidationPrice": 1.0820,
+    "bufferPipsApplied": 5.0,
+    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + buffer rather than obvious retail swing wick to avoid stop hunts",
+    "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
+  },
   "killZone": {
     "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE",
     "windowName": "The human-readable active window name",
@@ -472,25 +506,51 @@ app.post(["/api/chat-bot", "/chat-bot"], async (req: express.Request, res: expre
     const ai = getGeminiClient(customKey);
 
     // Prepare systemic constraints and inject collections data
-    let companionDirective = `You are a legendary SMC (Smart Money Concepts) Elite Mentor and risk specialist Coach with deep expertise across:
-1. Gold vs US Dollar (XAU/USD): Asian range liquidity sweeps, London Judas swings, London & NY AM Silver Bullet (03:00-04:00 & 10:00-11:00 AM EST), institutional round numbers ($2600, $2650), CPI/NFP news handling, and order block wicks.
-2. Bitcoin vs US Dollar (BTC/USD): CME Futures gap fills (85%+ probability), weekend range liquidity engineering, Monday weekly open Power of 3 (AMD), funding rate liquidation cascade sweeps into 1H/4H order blocks.
-3. Deriv Synthetic Indices: Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices.
-Provide professional, crisp, and high-value trading advice. Encourage strict risk management (1-2% rule).
+    let companionDirective = `You are the world's most disciplined, institutional SMC (Smart Money Concepts) Elite Mentor and Chief Risk Officer.
+You possess world-class expertise in eliminating retail losses and mastering institutional market execution across:
+1. FOREX CURRENCY PAIRS (Majors: EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, USD/CHF, NZD/USD; Crosses: GBP/JPY, EUR/JPY, EUR/GBP, EUR/AUD, GBP/CAD, AUD/NZD, etc.):
+   - ANTI-STOP-LOSS HUNTING ARCHITECTURE (CRITICAL MANDATE):
+     * Why 95% of retail setups hit Stop Loss: Retail traders place tight SLs directly at obvious swing highs/lows or equal highs/lows (EQH/EQL). Institutional algorithms (smart money banks) intentionally engineer liquidity sweeps (Turtle Soup / Judas Swing) that probe 3-10 pips beyond these levels before reversing into the true target!
+     * Structural Invalidation Placement: NEVER place Stop Loss right at the swing extreme or candle wick edge. The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the true candle that sponsored the Market Structure Shift or FVG creation) PLUS an asset-specific spread buffer:
+       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond structural invalidation.
+       - Volatile pairs (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
+       - High ATR Crosses (GBP/JPY, EUR/JPY, GBP/AUD): Minimum 10 to 15 pips buffer to survive wide broker spreads.
+     * The Premium vs. Discount 50% Rule: NEVER buy in Premium (>50% of the dealing range); NEVER sell in Discount (<50% of the dealing range). High probability entries MUST retrace to the 0.618 - 0.786 OTE (Optimal Trade Entry) zone inside Discount for buys, or Premium for sells.
+     * Killzone Precision & London Judas Swing:
+       - Asian Range (19:00-00:00 EST / 00:00-05:00 UTC): Establishes Asian High & Low liquidity boundaries.
+       - London Open Killzone (02:00-05:00 EST / 07:00-10:00 UTC): Over 70% of the time, the daily high or low is forged here via a Judas Swing (manipulation sweep of the Asian High or Low) before aggressive displacement in the real daily trend.
+       - New York AM Killzone (07:00-10:00 EST / 12:00-15:00 UTC): Highest liquidity session. Silver Bullet window (10:00-11:00 AM EST).
+       - London Close / NY PM (14:00-17:00 UTC): Profit taking; do not take fresh continuation setups here.
+     * SMT (Smart Money Technique) Divergence:
+       - Watch for correlation cracks between EUR/USD and GBP/USD (positive correlation), or DXY and EUR/USD (inverse correlation).
+       - When EUR/USD makes a Higher High but GBP/USD fails and prints a Lower High, Smart Money is secretly selling — this confirms the EUR/USD breakout was a retail trap!
+     * Red-Folder High-Impact News Blackout: Do NOT trade 15 minutes before or 15 minutes after CPI, NFP, FOMC rate decisions, or central bank speeches. Wait for news volatility to settle, identify the institutional displacement candle, and enter only on the subsequent FVG retest.
+     * In-Trade Risk Management: Always target minimum 1:2.5 or 1:3 Risk-to-Reward. Always take 50% partial profits at TP1 (first external liquidity pool) and move Stop Loss to Breakeven (+1 pip buffer) immediately to guarantee zero loss!
+
+2. GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
+   - Asian range sweeps, London Judas swings into 15M/1H OBs, NY AM Silver Bullet (10:00-11:00 AM EST), psychological round number handles ($2600, $2650, $2700), CPI/NFP displacement wicks.
+
+3. BITCOIN (BTC/USD) 24/7 SMC PLAYBOOK:
+   - CME Friday-to-Sunday gap fills (85%+ probability), weekend range liquidity sweeps, Monday weekly open Power of 3 (AMD), funding rate liquidation cascades into 1H/4H Breaker Blocks.
+
+4. DERIV SYNTHETIC INDICES:
+   - Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices. 24/7 algorithmic execution, no news slippage.
+
+Provide professional, crisp, and high-value trading advice. Emphasize capital preservation and exact mechanical rules over gambling.
 
 The active asset currently selected on screen is: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General/Unspecified"}.
 `;
 
     if (educationalMode) {
       companionDirective += `EDUCATIONAL MODE IS ON:
-- Break down concepts step-by-step with clear definitions (e.g., Order Block, CHoCH vs BOS, liquidity pools, FVGs).
-- Avoid dry answers; use clean typographic layouts (bullet points, markdown tables).
-- Frequently challenge the student with interactive quizzes! Offer multiple options (A, B, or C) and explain the mechanical answer when they respond.
+- Break down concepts step-by-step with clear definitions (e.g., Order Block, CHoCH vs BOS, liquidity pools, FVGs, OTE 0.705 Fib, Anti-SL buffer).
+- Avoid dry answers; use clean typographic layouts (bullet points, bold highlights, markdown tables).
+- Frequently challenge the student with interactive quizzes! Offer multiple options (A, B, or C) and explain the mechanical institutional answer when they respond.
 `;
     } else {
       companionDirective += `TACTICAL MODE IS ON:
 - Be highly precise, concise, and focused on immediate mechanical trade setups.
-- Use bullet points for entry, stop loss, and target instructions.
+- Use bullet points for entry, stop loss (with exact buffer), and target instructions.
 `;
     }
 
@@ -519,7 +579,6 @@ Acknowledge these learnings warmly to show you are aligned with their cumulative
 
     // Inject user's historical performance logs
     if (tradeHistory && tradeHistory.length > 0) {
-      // Compute simple stats
       const won = tradeHistory.filter((t: any) => t.status === "WON").length;
       const lost = tradeHistory.filter((t: any) => t.status === "LOST").length;
       const total = tradeHistory.length;
@@ -529,7 +588,7 @@ Acknowledge these learnings warmly to show you are aligned with their cumulative
 USER TRADING LOG PERFORMANCE:
 - Total Logged Trades: ${total}
 - Win Rate: ${winRate}% (${won} Wins, ${lost} Losses)
-- Favorite Indices: ${Array.from(new Set(tradeHistory.map((t: any) => t.symbol))).slice(0, 3).join(", ")}
+- Favorite Assets: ${Array.from(new Set(tradeHistory.map((t: any) => t.symbol))).slice(0, 4).join(", ")}
 Analyze their past pattern failures or successes if they ask for a 'performance audit', 'journal review', or 'how am I doing?'.
 `;
     }
@@ -550,8 +609,8 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
     // Build parts for the current message
     const currentParts: any[] = [];
 
-    // Attach chart image if loaded
-    if (chartImage) {
+    // Attach chart image if loaded and safely sized (< 4MB)
+    if (chartImage && typeof chartImage === "string" && chartImage.length > 50 && chartImage.length < 4000000) {
       let base64Data = chartImage.replace(/\s+/g, '');
       let mimeType = "image/png";
       if (chartImage.startsWith("data:")) {
@@ -561,19 +620,21 @@ Analyze their past pattern failures or successes if they ask for a 'performance 
           base64Data = parts[1].replace(/\s+/g, '');
         }
       }
-      currentParts.push({
-        inlineData: {
-          mimeType,
-          data: base64Data
-        }
-      });
+      if (base64Data.length > 0) {
+        currentParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data
+          }
+        });
+      }
     }
 
     currentParts.push({ text: prompt });
     contents.push({ role: "user", parts: currentParts });
 
-    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
-      model: "gemini-3.8-flash",
+    const response = await generateGeminiContent(ai, "gemini-2.5-flash", {
+      model: "gemini-2.5-flash",
       contents,
       config: {
         systemInstruction: companionDirective,

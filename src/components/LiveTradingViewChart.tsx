@@ -778,6 +778,35 @@ export default function LiveTradingViewChart({
         "J100": "JD100",
         "RB100": "RDBR100",
         "RB200": "RDBR200",
+        // Forex
+        "EURUSD": "frxEURUSD",
+        "GBPUSD": "frxGBPUSD",
+        "USDJPY": "frxUSDJPY",
+        "AUDUSD": "frxAUDUSD",
+        "USDCAD": "frxUSDCAD",
+        "USDCHF": "frxUSDCHF",
+        "NZDUSD": "frxNZDUSD",
+        "EURGBP": "frxEURGBP",
+        "EURJPY": "frxEURJPY",
+        "GBPJPY": "frxGBPJPY",
+        "AUDJPY": "frxAUDJPY",
+        "CADJPY": "frxCADJPY",
+        "CHFJPY": "frxCHFJPY",
+        "NZDJPY": "frxNZDJPY",
+        "EURAUD": "frxEURAUD",
+        "EURCAD": "frxEURCAD",
+        "GBPAUD": "frxGBPAUD",
+        "GBPCAD": "frxGBPCAD",
+        "AUDNZD": "frxAUDNZD",
+        "USDZAR": "frxUSDZAR",
+        // Metals & Commodities
+        "XAUUSD": "frxXAUUSD",
+        "XAGUSD": "frxXAGUSD",
+        "USOIL": "frxUSOIL",
+        // Crypto
+        "BTCUSD": "cryBTCUSD",
+        "ETHUSD": "cryETHUSD",
+        "SOLUSD": "crySOLUSD",
       };
       return map[tk] || tk;
     };

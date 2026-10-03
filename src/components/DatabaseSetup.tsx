@@ -35,13 +35,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
-  // GitHub Auto-Sync states with persistent localStorage storage
-  const [ghToken, setGhToken] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_token") || "" : ""));
-  const [ghOwner, setGhOwner] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_owner") || "ibrahimfaruqolamilekan4-boop" : "ibrahimfaruqolamilekan4-boop"));
-  const [ghRepo, setGhRepo] = useState(() => (typeof window !== "undefined" ? localStorage.getItem("custom_gh_repo") || "Noroya-Ai" : "Noroya-Ai"));
-  const [ghBranch, setGhBranch] = useState("main");
-  const [ghLoading, setGhLoading] = useState(false);
-  const [ghResult, setGhResult] = useState<{ success: boolean; message: string } | null>(null);
+
 
   const handleSaveGeminiKey = () => {
     if (typeof window !== "undefined") {
@@ -111,49 +105,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
     }
   };
 
-  const handleGitHubSync = async () => {
-    if (!ghToken || !ghOwner || !ghRepo) {
-      setGhResult({ success: false, message: "Please provide your GitHub Token, Owner/Username, and Repository Name." });
-      return;
-    }
-    setGhLoading(true);
-    setGhResult(null);
-    if (typeof window !== "undefined") {
-      if (ghToken) localStorage.setItem("custom_gh_token", ghToken);
-      if (ghOwner) localStorage.setItem("custom_gh_owner", ghOwner);
-      if (ghRepo) localStorage.setItem("custom_gh_repo", ghRepo);
-    }
-    try {
-      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
-      const res = await fetch(`/api/github-sync?_t=${Date.now()}`, {
-        method: "POST",
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          ...(customKey ? { "x-gemini-key": customKey } : {})
-        },
-        body: JSON.stringify({
-          token: ghToken,
-          owner: ghOwner,
-          repo: ghRepo,
-          branch: ghBranch || "main",
-          commitMessage: "feat: automated push of AI Synthetic Trading workstation and Deriv API workspace"
-        })
-      });
-      const data = await res.json();
-      if (data.success) {
-        setGhResult({ success: true, message: `Successfully pushed ${data.filesCount} files to ${ghOwner}/${ghRepo} (${ghBranch || "main"})! Commit SHA: ${data.commitSha.substring(0, 7)}` });
-      } else {
-        setGhResult({ success: false, message: data.error || "Failed to push to GitHub repository." });
-      }
-    } catch (err: any) {
-      setGhResult({ success: false, message: err.message || "Network error during GitHub synchronization." });
-    } finally {
-      setGhLoading(false);
-    }
-  };
+
 
   useEffect(() => {
     // Listen to Firebase Auth state
@@ -363,113 +315,7 @@ CREATE TABLE IF NOT EXISTS trades (
         )}
       </div>
 
-      {/* GitHub Automated Sync & Push */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden">
-        <div className="absolute top-0 right-0 h-48 w-48 bg-cyan-500/5 blur-[80px] rounded-full pointer-events-none"></div>
-        <div className="flex items-center gap-3 mb-4">
-          <div className="bg-cyan-500/10 border border-cyan-500/20 p-2.5 rounded-xl text-cyan-400">
-            <Code className="h-6 w-6" />
-          </div>
-          <div>
-            <h3 className="text-base font-bold font-display text-slate-900 flex items-center gap-2">
-              Automated GitHub Repository Sync & Push
-              <span className="text-xs bg-cyan-950 border border-cyan-800 px-2 py-0.5 rounded-full text-cyan-300">
-                Octokit Powered
-              </span>
-            </h3>
-            <p className="text-xs text-slate-600">Automatically push all project files, AI scanner components, and trading modules to your GitHub repository</p>
-          </div>
-        </div>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">GitHub Personal Access Token (PAT)</label>
-              <input
-                type="password"
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                value={ghToken}
-                onChange={(e) => setGhToken(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500 font-mono"
-              />
-              <div className="flex flex-col gap-1 mt-1">
-                <p className="text-[10.5px] text-slate-500">
-                  Requires a Classic Token starting with <code className="text-cyan-600 font-bold">ghp_</code> with <code className="text-cyan-600 font-bold">repo</code> scope checked.
-                </p>
-                <a
-                  href="https://github.com/settings/tokens/new?scopes=repo&description=Noroya-Ai-Sync"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-[10.5px] text-indigo-600 hover:text-indigo-700 underline font-medium flex items-center gap-1"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  Generate New GitHub Token (repo scope pre-checked)
-                </a>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">GitHub Username / Organization</label>
-              <input
-                type="text"
-                placeholder="e.g. ibrahimfaruq"
-                value={ghOwner}
-                onChange={(e) => setGhOwner(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Repository Name</label>
-              <input
-                type="text"
-                placeholder="e.g. deriv-smc-ai-workstation"
-                value={ghRepo}
-                onChange={(e) => setGhRepo(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Branch Name</label>
-              <input
-                type="text"
-                placeholder="main"
-                value={ghBranch}
-                onChange={(e) => setGhBranch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-cyan-500"
-              />
-            </div>
-          </div>
-
-          {ghResult && (
-            <div className={`p-3 rounded-xl border text-xs font-mono leading-relaxed ${ghResult.success ? "bg-emerald-950/40 border-emerald-800 text-emerald-300" : "bg-red-950/40 border-red-800 text-red-300"}`}>
-              {ghResult.message}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-            <button
-              onClick={handleGitHubSync}
-              disabled={ghLoading}
-              className="px-5 py-2.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg shadow-cyan-500/20"
-            >
-              {ghLoading ? (
-                <div className="h-4 w-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <Code className="h-4 w-4" />
-              )}
-              {ghLoading ? "Syncing & Pushing to GitHub..." : "Sync & Push to GitHub Now"}
-            </button>
-            <a
-              href="https://github.com/new"
-              target="_blank"
-              rel="noreferrer"
-              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 font-medium text-xs rounded-xl transition flex items-center gap-2"
-            >
-              <ExternalLink className="h-4 w-4 text-cyan-400" />
-              Create New GitHub Repo
-            </a>
-          </div>
-        </div>
-      </div>
 
       {/* Gemini AI & Vercel Deployment Setup */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 relative overflow-hidden">

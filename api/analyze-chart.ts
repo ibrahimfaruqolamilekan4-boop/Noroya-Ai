@@ -206,12 +206,40 @@ ${reinforcementLearningPrompt}
 
 CRITICAL ANALYSIS INSTRUCTIONS:
 1. ASSET-SPECIFIC INSTITUTIONAL SMC KNOWLEDGE:
+   - FOREX CURRENCY PAIRS INSTITUTIONAL PLAYBOOK & ANTI-STOP-LOSS ENGINE:
+     * THE #1 REASON SETUPS HIT STOP LOSS (ANTI-SL HUNTING MANDATE):
+       Retail traders place their Stop Loss directly on obvious swing highs, swing lows, or equal highs/lows (EQH/EQL). Institutional algorithms (banks and market makers) intentionally engineer liquidity sweeps (Judas Swing / Turtle Soup / 3-Drive Liquidity Run) that probe 3 to 10 pips past these levels before expanding toward the actual target!
+     * STRUCTURAL INVALIDATION STOP LOSS PLACEMENT:
+       Never place the Stop Loss right at the swing extreme or Order Block wick edge.
+       The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the candle that broke structure or formed the FVG) PLUS an asset-specific spread & volatility buffer:
+       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond the structural invalidation point.
+       - High volatility majors (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
+       - Cross pairs (GBP/JPY, EUR/JPY, EUR/AUD, GBP/CAD): Minimum 10 to 15 pips buffer to absorb aggressive spread widening.
+       If the required safe structural Stop Loss makes the Risk:Reward less than 1:2.5, DO NOT tighten the SL into the sweep zone; instead, calculate a deeper limit entry at OTE (0.705/0.786 Fib) inside Discount/Premium, or set tradeSetup.type to "WAIT".
+     * STRICT 50% DEALING RANGE RULE (PREMIUM VS DISCOUNT):
+       - NEVER suggest a BUY in Premium (>50% equilibrium of the dealing range). Longs MUST be taken in deep Discount (<50%), ideally at 0.618 - 0.786 Optimal Trade Entry (OTE).
+       - NEVER suggest a SELL in Discount (<50% equilibrium of the dealing range). Shorts MUST be taken in deep Premium (>50%).
+     * SESSION KILLZONES & LONDON JUDAS SWINGS:
+       - Asian Session Range (19:00–00:00 EST / 00:00–05:00 UTC): Establishes the Asian High and Asian Low liquidity boundaries.
+       - London Open Killzone (02:00–05:00 EST / 07:00–10:00 UTC): Over 70% of the time, the daily high or low is formed here. The London Judas Swing manipulates price by sweeping the Asian High or Low, traps breakout traders, mitigates an HTF Order Block, and then displaces in the true daily trend direction.
+       - New York AM Killzone (07:00–10:00 EST / 12:00–15:00 UTC): High volatility institutional order flow. Silver Bullet window (10:00–11:00 AM EST) with clean FVG rebalances.
+       - London Close / NY PM (14:00–17:00 UTC): Institutional profit taking. Stand aside from new trend continuation entries.
+     * SMT (SMART MONEY TECHNIQUE) DIVERGENCE:
+       - Track correlation cracks between positively correlated pairs (EUR/USD vs GBP/USD) or inversely correlated assets (DXY vs EUR/USD).
+       - When EUR/USD makes a Higher High but GBP/USD fails and forms a Lower High, Smart Money is distributing — the EUR/USD high is a retail trap, expect a sharp reversal downward!
+       - When EUR/USD makes a Lower Low but GBP/USD forms a Higher Low, Smart Money is accumulating — expect a sharp reversal upward!
+     * RED-FOLDER HIGH-IMPACT NEWS RISK (CPI, NFP, FOMC, Rate Decisions):
+       - Never enter within 15 minutes before or after red-folder news. News candles cause spread blowouts and dual-sided liquidity spikes. Wait for the post-news displacement candle, identify the new Fair Value Gap, and enter on the retest.
+     * IN-TRADE RISK MANAGEMENT:
+       - Minimum 1:2.5 or 1:3 Risk-to-Reward ratio required.
+       - Take 50% partial profits at TP1 (first external liquidity pool) and immediately move Stop Loss to Breakeven (+1 pip buffer) to eliminate 100% of risk.
+
    - GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
      * Asian Session Range Liquidity Sweeps: Asian range (00:00–06:00 GMT) establishes clean equal highs/lows. London Open (07:00–09:00 GMT / 02:00–04:00 AM EST) Judas Swing aggressively sweeps the Asian range high or low, traps retail breakout traders, then delivers price into an unmitigated 15M/1H institutional Order Block.
      * New York Kill Zone & Macro Volatility: 08:30 AM EST (CPI, NFP, PPI) and 10:00 AM EST high-impact releases engineer aggressive displacement wicks. Never chase the initial news spike; execute on the subsequent FVG rebalance and institutional mitigation block.
      * Institutional Round Psychological Numbers: Key reactions cluster around psychological levels ($10, $50, and $100 levels like $2,600, $2,650, $2,700). High probability limit entries occur at confluences between an Order Block and a round level.
      * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
-     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level.
+     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level with $2.50 to $3.50 buffer.
 
    - BITCOIN (BTC/USD) 24/7 CRYPTO SMC PLAYBOOK:
      * CME Bitcoin Futures Gap Fills: Gaps formed between Friday 17:00 EST close and Sunday 18:00 EST open act as powerful institutional magnets, with over 85% probability of being rebalanced during early week sessions.
@@ -270,6 +298,12 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
   "marketStructure": "Structural description (e.g. Bullish BOS, Liquidity swept, or Bearish CHoCH)",
   "confluenceScore": 4.5,
+  "antiStopLossShield": {
+    "structuralInvalidationPrice": 1.0820,
+    "bufferPipsApplied": 5.0,
+    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + buffer rather than obvious retail swing wick to avoid stop hunts",
+    "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
+  },
   "killZone": {
     "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE",
     "windowName": "Window name",
@@ -348,7 +382,7 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
     "rationale": "Rationale"
   },
   "educationalInsight": "Educational lesson"
-}`;
+};`;
 
     const textPart = {
       text: `Analyze the provided chart screenshot(s) for ${symbol || "Synthetic Index"} under the ${timeframe || "30M"} timeframe according to Smart Money Concepts (SMC), Supply and Demand, and Fibonacci retracement mechanics. Estimate logical numerical index parameters for the entry, stop-loss, and take-profit targets based on the charts' visible numbers/ranges. Only offer a BUY/SELL signal if we have 4+ confluences, otherwise set to WAITING.`,
