@@ -24,7 +24,7 @@ import {
   Download,
   Code
 } from "lucide-react";
-import { SYNTHETIC_SYMBOLS, SyntheticSymbol } from "./data/symbols";
+import { SYNTHETIC_SYMBOLS, SyntheticSymbol, MarketClassType } from "./data/symbols";
 import {
   Trade,
   getTrades,
@@ -44,16 +44,27 @@ import PnlGrowthChart from "./components/PnlGrowthChart";
 import QuickNoteModal from "./components/QuickNoteModal";
 import LiveTradingViewChart from "./components/LiveTradingViewChart";
 import PineScriptGenerator from "./components/PineScriptGenerator";
+import { LandingPage } from "./components/LandingPage";
+import { PWAInstallBanner } from "./components/PWAInstallBanner";
+import { QuantAnalyzerPanel } from "./components/QuantAnalyzerPanel";
+import { cacheChartStateToSW } from "./lib/usePWAInstall";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getUserLearnings } from "./lib/firebaseChat";
 const compressImage = async (dataUrl: string, maxWidth = 1000, quality = 0.5): Promise<string> => { return new Promise((resolve, reject) => { const img = new Image(); img.onload = () => { const canvas = document.createElement("canvas"); let width = img.width; let height = img.height; if (width > maxWidth) { height = Math.round((height * maxWidth) / width); width = maxWidth; } canvas.width = width; canvas.height = height; const ctx = canvas.getContext("2d"); if (!ctx) return resolve(dataUrl); ctx.drawImage(img, 0, 0, width, height); resolve(canvas.toDataURL("image/jpeg", quality)); }; img.onerror = (err) => resolve(dataUrl); img.src = dataUrl; }); };
 
 export default function App() {
+  const [currentRoute, setCurrentRoute] = useState<"landing" | "dashboard">(() => {
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/dashboard")) {
+      return "dashboard";
+    }
+    return "landing";
+  });
   const [activeTab, setActiveTab] = useState<"analyzer" | "calculator" | "journal" | "databases">("analyzer");
   const [chatSidebarOpen, setChatSidebarOpen] = useState(false);
 
   // Selection state
+  const [marketClassFilter, setMarketClassFilter] = useState<"ALL" | MarketClassType>("ALL");
   const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
   const [timeframe, setTimeframe] = useState<string>("H1");
   const [customSymbolText, setCustomSymbolText] = useState("");
@@ -82,7 +93,7 @@ export default function App() {
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [analysisProgress, setAnalysisProgress] = useState<string>("");
   const [analysisResult, setAnalysisResult] = useState<any>(null);
-  const [analyzerSubTab, setAnalyzerSubTab] = useState<"analysis" | "drawing" | "live_feed" | "pine_script">("live_feed");
+  const [analyzerSubTab, setAnalyzerSubTab] = useState<"quant_engine" | "analysis" | "drawing" | "live_feed" | "pine_script">("quant_engine");
   const [activeLevels, setActiveLevels] = useState<{ entry: number; stopLoss: number; tp1: number; tp2: number }>({
     entry: 0,
     stopLoss: 0,
@@ -528,21 +539,60 @@ export default function App() {
     return t.status === journalFilter;
   });
 
+  const filteredSymbolsByClass = SYNTHETIC_SYMBOLS.filter((s) => {
+    if (marketClassFilter === "ALL") return true;
+    return s.marketType === marketClassFilter;
+  });
+
+  if (currentRoute === "landing") {
+    return (
+      <>
+        <PWAInstallBanner />
+        <LandingPage
+          onLaunchDashboard={(selectedSymbol) => {
+            if (selectedSymbol) {
+              setSymbol(selectedSymbol);
+            }
+            navigateToDashboard();
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col selection:bg-indigo-500/30 selection:text-indigo-200">
+      <PWAInstallBanner />
       
       {/* HEADER SECTION */}
       <header className="border-b border-slate-200 bg-white/90 backdrop-blur sticky top-0 z-40 px-4 md:px-8 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-4">
         <div className="flex items-center gap-3">
-          <div className="bg-indigo-600/10 border border-indigo-500/20 p-2.5 rounded-xl glow-cyan text-cyan-400">
+          <button
+            type="button"
+            onClick={navigateToLanding}
+            title="Return to Landing Overview"
+            className="bg-indigo-600/10 border border-indigo-500/20 p-2.5 rounded-xl glow-cyan text-cyan-400 hover:bg-indigo-600/20 transition cursor-pointer"
+          >
             <LineChart className="h-6 w-6" />
-          </div>
+          </button>
           <div>
             <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold font-display tracking-tight text-slate-900 uppercase">Synthetic SMC Trader</h1>
-              <span className="bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] uppercase px-1.5 py-0.5 rounded-md font-mono">
-                Beta v1.1
+              <h1
+                onClick={navigateToLanding}
+                className="text-xl font-bold font-display tracking-tight text-slate-900 uppercase cursor-pointer hover:text-cyan-400 transition"
+              >
+                SMC Quant Terminal
+              </h1>
+              <span className="bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-[10px] uppercase px-1.5 py-0.5 rounded-md font-mono font-bold">
+                v2.4 Multi-Asset
               </span>
+              <button
+                type="button"
+                onClick={navigateToLanding}
+                className="text-[10px] font-mono text-slate-500 hover:text-cyan-400 border border-slate-200 px-2 py-0.5 rounded-md transition cursor-pointer"
+              >
+                Landing Page
+              </button>
               {firebaseUser?.email === "ibrahimfaruqolamilekan4@gmail.com" && (
                 <span className="bg-amber-400/15 border border-amber-400/40 text-amber-300 text-[9px] font-bold uppercase px-2 py-0.5 rounded-full font-mono flex items-center gap-1 shadow-sm shadow-amber-500/20 animate-pulse">
                   <ShieldCheck className="h-4 w-4 text-amber-400" />
@@ -550,7 +600,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-600">Algorithmic SMC retracement scanning & journaling framework</p>
+            <p className="text-[11px] text-slate-600">5-Module Quantitative Confluence Engine • Forex, Synthetics &amp; Crypto Perpetuals</p>
           </div>
         </div>
 
@@ -566,7 +616,7 @@ export default function App() {
               }`}
             >
               <Upload className="h-4 w-4" />
-              Chart Analyzer
+              Quant Analyzer
             </button>
             <button
               onClick={() => setActiveTab("calculator")}
@@ -644,12 +694,51 @@ export default function App() {
             {/* Left controller: dropzone & settings */}
             <div className="lg:col-span-5 space-y-6">
               <div className="bg-white border border-slate-200 rounded-2xl p-6">
-                <h2 className="text-lg font-bold font-display text-slate-900 mb-4">Index Configuration</h2>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <h2 className="text-lg font-bold font-display text-slate-900">Multi-Asset Matrix</h2>
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-bold">
+                    {symbol.marketType === "CRYPTO_PERP"
+                      ? "Bybit/Binance Perp"
+                      : symbol.marketType === "SYNTHETIC"
+                      ? "24/7 Synthetic"
+                      : "Institutional Forex"}
+                  </span>
+                </div>
+
+                {/* Market Class Filter Tabs */}
+                <div className="grid grid-cols-4 gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 mb-4 font-mono">
+                  {[
+                    { id: "ALL", label: "All (35)" },
+                    { id: "FOREX", label: "Forex" },
+                    { id: "SYNTHETIC", label: "Synthetics" },
+                    { id: "CRYPTO_PERP", label: "Perps .P" },
+                  ].map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => {
+                        const nextClass = tab.id as "ALL" | MarketClassType;
+                        setMarketClassFilter(nextClass);
+                        if (nextClass !== "ALL" && symbol.marketType !== nextClass) {
+                          const firstMatch = SYNTHETIC_SYMBOLS.find((s) => s.marketType === nextClass);
+                          if (firstMatch) setSymbol(firstMatch);
+                        }
+                      }}
+                      className={`py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider transition cursor-pointer ${
+                        marketClassFilter === tab.id
+                          ? "bg-slate-200 text-cyan-400 border border-slate-300 shadow-sm"
+                          : "text-slate-600 hover:text-slate-900"
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
                 
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
                     <label className="block text-[10px] font-semibold text-slate-700 uppercase tracking-widest mb-1.5 font-display">
-                      Asset / Currency Pair / Synthetic Symbol
+                      Asset / Pair / Perpetual
                     </label>
                     <select
                       value={symbol.ticker}
@@ -659,48 +748,60 @@ export default function App() {
                       }}
                       className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-200 text-slate-800 rounded-xl focus:outline-none focus:border-indigo-500 text-xs transition font-mono font-medium"
                     >
-                      <optgroup label="Forex Major Currency Pairs">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Forex" && ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker)).map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Forex Cross Currency Pairs">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Forex" && !["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker)).map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Commodities & Precious Metals">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Commodities").map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Crypto 24/7 Spot">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Crypto").map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Global Stock Indices">
-                        {SYNTHETIC_SYMBOLS.filter((s) => s.category === "Indices").map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Deriv Synthetic Indices">
-                        {SYNTHETIC_SYMBOLS.filter((s) => !["Forex", "Commodities", "Crypto", "Indices"].includes(s.category)).map((s) => (
-                          <option value={s.ticker} key={s.ticker}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </optgroup>
+                      {(marketClassFilter === "ALL" || marketClassFilter === "CRYPTO_PERP") && (
+                        <optgroup label="Crypto Futures & Perpetuals (Bybit / Binance)">
+                          {filteredSymbolsByClass
+                            .filter((s) => s.marketType === "CRYPTO_PERP")
+                            .map((s) => (
+                              <option value={s.ticker} key={s.ticker}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+                      {(marketClassFilter === "ALL" || marketClassFilter === "FOREX") && (
+                        <>
+                          <optgroup label="Standard Forex — Majors & Metals">
+                            {filteredSymbolsByClass
+                              .filter(
+                                (s) =>
+                                  s.marketType === "FOREX" &&
+                                  (["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker) ||
+                                    s.category === "Commodities")
+                              )
+                              .map((s) => (
+                                <option value={s.ticker} key={s.ticker}>
+                                  {s.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                          <optgroup label="Standard Forex — Minors, Crosses & Exotics">
+                            {filteredSymbolsByClass
+                              .filter(
+                                (s) =>
+                                  s.marketType === "FOREX" &&
+                                  !["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD"].includes(s.ticker) &&
+                                  s.category !== "Commodities"
+                              )
+                              .map((s) => (
+                                <option value={s.ticker} key={s.ticker}>
+                                  {s.name}
+                                </option>
+                              ))}
+                          </optgroup>
+                        </>
+                      )}
+                      {(marketClassFilter === "ALL" || marketClassFilter === "SYNTHETIC") && (
+                        <optgroup label="Synthetic Indices (24/7 Algorithmic)">
+                          {filteredSymbolsByClass
+                            .filter((s) => s.marketType === "SYNTHETIC")
+                            .map((s) => (
+                              <option value={s.ticker} key={s.ticker}>
+                                {s.name}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
                     </select>
                   </div>
 
@@ -725,16 +826,18 @@ export default function App() {
                 {/* Popular Quick-Select Asset Chips */}
                 <div className="mb-4">
                   <span className="block text-[9.5px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5 font-mono">
-                    Quick Select Pairs & Indices:
+                    Quick Select Institutional Instruments:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {[
-                      { ticker: "EURUSD", label: "💶 EUR/USD", color: "text-blue-500 bg-blue-500/10 border-blue-500/30 hover:bg-blue-500/20" },
-                      { ticker: "GBPUSD", label: "💷 GBP/USD", color: "text-indigo-500 bg-indigo-500/10 border-indigo-500/30 hover:bg-indigo-500/20" },
-                      { ticker: "USDJPY", label: "💴 USD/JPY", color: "text-red-500 bg-red-500/10 border-red-500/30 hover:bg-red-500/20" },
-                      { ticker: "XAUUSD", label: "⭐ Gold (XAU/USD)", color: "text-amber-500 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
-                      { ticker: "BTCUSD", label: "⚡ Bitcoin (BTC/USD)", color: "text-orange-500 bg-orange-500/10 border-orange-500/30 hover:bg-orange-500/20" },
-                      { ticker: "V75", label: "🔥 Volatility 75", color: "text-cyan-500 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20" },
+                      { ticker: "BTCUSDT.P", label: "BTCUSDT.P", color: "text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
+                      { ticker: "ETHUSDT.P", label: "ETHUSDT.P", color: "text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
+                      { ticker: "SOLUSDT.P", label: "SOLUSDT.P", color: "text-amber-400 bg-amber-500/10 border-amber-500/30 hover:bg-amber-500/20" },
+                      { ticker: "EURUSD", label: "EUR/USD", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20" },
+                      { ticker: "GBPJPY", label: "GBP/JPY", color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30 hover:bg-cyan-500/20" },
+                      { ticker: "XAUUSD", label: "XAU/USD", color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20" },
+                      { ticker: "V75", label: "Volatility 75", color: "text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20" },
+                      { ticker: "B1000", label: "Boom 1000", color: "text-purple-400 bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20" },
                     ].map((item) => (
                       <button
                         key={item.ticker}
@@ -743,9 +846,9 @@ export default function App() {
                           const target = SYNTHETIC_SYMBOLS.find((s) => s.ticker === item.ticker);
                           if (target) setSymbol(target);
                         }}
-                        className={`text-[10px] font-mono font-bold px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                        className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                           symbol.ticker === item.ticker
-                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            ? "bg-cyan-500 text-slate-950 border-cyan-400 shadow-sm"
                             : item.color
                         }`}
                       >
@@ -755,46 +858,51 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Specialized Pair Strategy Playbook Badge */}
-                {symbol.category === "Forex" && (
+                {/* Specialized Market Class Strategy Playbook Badge */}
+                {symbol.marketType === "CRYPTO_PERP" && symbol.futuresMetrics && (
+                  <div className="mb-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
+                    <div className="flex items-center justify-between text-amber-400 font-bold text-[10px] uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                        {symbol.ticker} Perpetual Futures Telemetry ({symbol.futuresMetrics.exchange})
+                      </span>
+                      <span>Funding: {symbol.futuresMetrics.fundingRate}</span>
+                    </div>
+                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
+                      <li><strong className="text-slate-800">Open Interest &amp; L/S Ratio:</strong> OI {symbol.futuresMetrics.openInterestUsd} ({symbol.futuresMetrics.oiDelta24h}) • L/S Ratio {symbol.futuresMetrics.longShortRatio.toFixed(2)}.</li>
+                      <li><strong className="text-slate-800">CVD Divergence &amp; OI Flush:</strong> {symbol.futuresMetrics.cvdBias.replace(/_/g, " ")} — Wait for OI flush on liquidity sweep before CHoCH entry.</li>
+                      <li><strong className="text-slate-800">High-Leverage Liquidation Clusters:</strong> 100x Longs @ {symbol.futuresMetrics.liquidationClusters.tier100xLong} | 100x Shorts @ {symbol.futuresMetrics.liquidationClusters.tier100xShort}.</li>
+                    </ul>
+                  </div>
+                )}
+
+                {symbol.marketType === "SYNTHETIC" && symbol.syntheticProfile && (
+                  <div className="mb-4 bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-transparent border border-purple-500/30 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
+                    <div className="flex items-center justify-between text-purple-400 font-bold text-[10px] uppercase tracking-wider">
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                        {symbol.name} 24/7 Algorithmic Tick Engine
+                      </span>
+                      <span>No News Risk</span>
+                    </div>
+                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
+                      <li><strong className="text-slate-800">Volatility Profile:</strong> {symbol.syntheticProfile.constantVolatilityPct} ({symbol.syntheticProfile.meanReversionSigma})</li>
+                      <li><strong className="text-slate-800">Tick-Spike Mechanics:</strong> {symbol.syntheticProfile.generationEngine}</li>
+                      <li><strong className="text-slate-800">Pre-Spike Base Rule:</strong> {symbol.syntheticProfile.preSpikeBaseRule}</li>
+                    </ul>
+                  </div>
+                )}
+
+                {symbol.marketType === "FOREX" && (
                   <div className="mb-4 bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-transparent border border-blue-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
-                    <div className="flex items-center gap-1.5 text-blue-600 font-bold text-[10px] uppercase tracking-wider">
+                    <div className="flex items-center gap-1.5 text-blue-500 font-bold text-[10px] uppercase tracking-wider">
                       <Sparkles className="h-3.5 w-3.5 text-blue-500" />
-                      <span>{symbol.name} Institutional SMC &amp; Anti-Stop-Loss Engine</span>
+                      <span>{symbol.name} Institutional ICT/SMC &amp; OTE 0.705 Engine</span>
                     </div>
                     <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
-                      <li><strong className="text-slate-800">Anti-SL Hunting Rule:</strong> Stop loss must be placed strictly behind the structural displacement candle origin + 4-6 pip buffer (never at equal highs/lows where banks hunt liquidity).</li>
-                      <li><strong className="text-slate-800">Session Killzones &amp; Judas Swing:</strong> London Open (02:00–05:00 EST) false manipulation sweep of Asian high/low before true institutional trend. NY AM Silver Bullet (10:00–11:00 EST).</li>
-                      <li><strong className="text-slate-800">Premium vs. Discount 50% Rule:</strong> Only buy in deep Discount (&lt;50% of dealing range at 0.618–0.786 OTE); only sell in Premium (&gt;50%).</li>
-                      <li><strong className="text-slate-800">SMT Divergence:</strong> Cross-check correlation cracks (EUR/USD vs GBP/USD / DXY). Stand aside 15 mins before/after red-folder news (CPI, NFP, FOMC).</li>
-                    </ul>
-                  </div>
-                )}
-
-                {symbol.ticker === "XAUUSD" && (
-                  <div className="mb-4 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
-                    <div className="flex items-center gap-1.5 text-amber-600 font-bold text-[10px] uppercase tracking-wider">
-                      <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                      <span>XAU/USD Gold Institutional SMC Playbook</span>
-                    </div>
-                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
-                      <li><strong className="text-slate-800">Asian Liquidity Sweeps:</strong> London Open (07:00–09:00 GMT) sweeps Asian range highs/lows into 15M/1H OBs.</li>
-                      <li><strong className="text-slate-800">Silver Bullet Windows:</strong> 03:00–04:00 AM &amp; 10:00–11:00 AM EST FVG entries.</li>
-                      <li><strong className="text-slate-800">Psychological Round Numbers:</strong> $10 &amp; $50 handles ($2600, $2650, $2700) act as high-edge magnets.</li>
-                    </ul>
-                  </div>
-                )}
-
-                {symbol.ticker === "BTCUSD" && (
-                  <div className="mb-4 bg-gradient-to-r from-orange-500/10 via-orange-500/5 to-transparent border border-orange-500/25 rounded-xl p-3 space-y-1.5 font-mono text-[10.5px]">
-                    <div className="flex items-center gap-1.5 text-orange-600 font-bold text-[10px] uppercase tracking-wider">
-                      <Sparkles className="h-3.5 w-3.5 text-orange-500" />
-                      <span>BTC/USD Bitcoin 24/7 SMC Playbook</span>
-                    </div>
-                    <ul className="text-slate-600 text-[10px] space-y-1 list-disc list-inside">
-                      <li><strong className="text-slate-800">CME Weekend Gap:</strong> Friday close to Sunday open gap has 85%+ fill probability.</li>
-                      <li><strong className="text-slate-800">Monday Weekly AMD:</strong> Monday range setup -&gt; Tuesday manipulation sweep -&gt; Wed/Fri distribution.</li>
-                      <li><strong className="text-slate-800">Liquidation Cascades:</strong> Sweeping equal highs/lows on leverage into 1H/4H Breaker Blocks.</li>
+                      <li><strong className="text-slate-800">Anti-SL Hunting Rule:</strong> Stop loss placed strictly behind the structural displacement candle origin + ATR buffer.</li>
+                      <li><strong className="text-slate-800">ICT Killzones &amp; Judas Swing:</strong> London Open (02:00–05:00 EST), NY Open (07:00–10:00 EST), and Silver Bullet (10:00–11:00 EST).</li>
+                      <li><strong className="text-slate-800">OTE 0.705 Sweet Spot:</strong> Strictly filter Longs in Discount (&lt;0.50 EQ) and Shorts in Premium (&gt;0.50 EQ).</li>
                     </ul>
                   </div>
                 )}
@@ -1123,6 +1231,18 @@ export default function App() {
               <div className="flex bg-white border border-slate-200 p-1 rounded-xl w-full sm:w-fit flex-wrap gap-1">
                 <button
                   type="button"
+                  onClick={() => setAnalyzerSubTab("quant_engine")}
+                  className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    analyzerSubTab === "quant_engine"
+                      ? "bg-slate-200 border border-slate-300 text-cyan-400 font-bold"
+                      : "text-slate-600 hover:text-slate-800"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>5-Module Quant Engine</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => setAnalyzerSubTab("live_feed")}
                   className={`flex-1 sm:flex-initial px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
                     analyzerSubTab === "live_feed"
@@ -1153,7 +1273,7 @@ export default function App() {
                       : "text-slate-600 hover:text-slate-800"
                   }`}
                 >
-                  <span>SMC Analysis Result</span>
+                  <span>AI Screenshot Scan</span>
                   {analysisResult && (
                     <span className="bg-emerald-500 text-slate-900 rounded-full h-1.5 w-1.5 animate-pulse ml-1 inline-block"></span>
                   )}
@@ -1175,12 +1295,33 @@ export default function App() {
               {isAnalyzing && (
                 <div className="bg-white border border-cyan-500/10 rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[450px]">
                   <Loader2 className="h-10 w-10 text-cyan-400 animate-spin mb-4" />
-                  <h3 className="text-md font-bold font-display text-slate-900 uppercase tracking-wider animate-pulse">Running SMC Recognition</h3>
+                  <h3 className="text-md font-bold font-display text-slate-900 uppercase tracking-wider animate-pulse">Running 5-Module Quantitative Recognition</h3>
                   <p className="text-xs text-slate-600 mt-2 max-w-sm font-mono text-cyan-500/70">{analysisProgress}</p>
                   <p className="text-[10px] text-slate-500 italic mt-8 max-w-xs block leading-relaxed">
-                    Analyzing market structural imbalances, looking for inducement thresholds, and computing discount retracements.
+                    Evaluating SMC/ICT structure, 0.705 OTE Fibonacci confluence, HTF POI candlestick triggers, and asset-specific CVD/OI/Synthetic filters.
                   </p>
                 </div>
+              )}
+
+              {!isAnalyzing && analyzerSubTab === "quant_engine" && (
+                <QuantAnalyzerPanel
+                  symbol={symbol}
+                  timeframe={timeframe}
+                  aiAnalysisResult={analysisResult}
+                  onSyncLevelsToWorkspace={(levels) => {
+                    setEntryPrice(levels.entry.toString());
+                    setStopLossPrice(levels.stopLoss.toString());
+                    setTakeProfitPrice(levels.tp2.toString());
+                    setCalcDirection(levels.tp2 >= levels.entry ? "BUY" : "SELL");
+                    setActiveLevels({
+                      entry: levels.entry,
+                      stopLoss: levels.stopLoss,
+                      tp1: levels.tp1,
+                      tp2: levels.tp2,
+                    });
+                    setActiveTab("calculator");
+                  }}
+                />
               )}
 
               {!isAnalyzing && analyzerSubTab === "live_feed" && (

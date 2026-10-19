@@ -799,14 +799,22 @@ export default function LiveTradingViewChart({
         "GBPCAD": "frxGBPCAD",
         "AUDNZD": "frxAUDNZD",
         "USDZAR": "frxUSDZAR",
+        "USDMXN": "frxUSDMXN",
+        "USDTRY": "frxUSDTRY",
         // Metals & Commodities
         "XAUUSD": "frxXAUUSD",
         "XAGUSD": "frxXAGUSD",
         "USOIL": "frxUSOIL",
-        // Crypto
+        // Crypto & Perpetuals
         "BTCUSD": "cryBTCUSD",
         "ETHUSD": "cryETHUSD",
         "SOLUSD": "crySOLUSD",
+        "BTCUSDT.P": "cryBTCUSD",
+        "ETHUSDT.P": "cryETHUSD",
+        "SOLUSDT.P": "crySOLUSD",
+        "BNBUSDT.P": "cryBNBUSD",
+        "XRPUSDT.P": "cryXRPUSD",
+        "SUIUSDT.P": "cryBTCUSD",
       };
       return map[tk] || tk;
     };

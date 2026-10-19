@@ -1,0 +1,39 @@
+{
+  "id": "/",
+  "name": "QuantSMC Multi-Asset Institutional Terminal",
+  "short_name": "QuantSMC",
+  "description": "Institutional Quantitative Market Analyzer covering Forex, Synthetic Indices, and Crypto Futures (Bybit/Perpetuals) with 5-Module SMC/ICT/Fibonacci Confluence Scoring.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0B0E14",
+  "theme_color": "#0B0E14",
+  "orientation": "any",
+  "categories": ["finance", "productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

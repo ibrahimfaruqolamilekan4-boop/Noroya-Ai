@@ -291,59 +291,23 @@ CRITICAL ANALYSIS INSTRUCTIONS:
      * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
      * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level with $2.50 to $3.50 buffer.
 
-   - BITCOIN (BTC/USD) 24/7 CRYPTO SMC PLAYBOOK:
-     * CME Bitcoin Futures Gap Fills: Gaps formed between Friday 17:00 EST close and Sunday 18:00 EST open act as powerful institutional magnets, with over 85% probability of being rebalanced during early week sessions.
-     * Weekend Range Liquidity Engineering: Weekend consolidations build massive buy-side and sell-side liquidity pools. Sunday midnight or Monday London/NY session triggers violent manipulation sweeps (Judas swings) into deep discount zones before weekly expansion.
-     * Monday Weekly Open Power of 3 (AMD): Monday sets initial reference high/low. Tuesday manipulates against trend to engineer stop runs. Wednesday through Friday distributes toward institutional HTF targets.
-     * Funding Rate & Liquidation Cascade Sweeps: Aggressive wick rejections below equal lows or above equal highs trigger cascading liquidations on leverage, delivering price into pristine 1H/4H Breaker Blocks or Order Blocks.
+   - CRYPTO FUTURES & PERPETUALS (BYBIT / BINANCE: BTCUSDT.P, ETHUSDT.P, SOLUSDT.P, etc.) PLAYBOOK:
+     * Combine SMC structure with CVD (Cumulative Volume Delta) Divergences and Open Interest (OI) Flushes: e.g., price sweeps Sell-Side Liquidity (SSL) below equal lows, 50x/100x leveraged longs are liquidated causing an OI flush, followed by bullish CVD absorption and an LTF CHoCH/MSS.
+     * Account for 8-hour Funding Rates and Long/Short ratios: negative funding with rising OI inside a Discount Order Block indicates trapped aggressive shorts primed for a squeeze.
+     * CME Bitcoin Futures Gap Fills & Weekend Range Liquidity Engineering.
 
-   - DERIV SYNTHETIC INDICES KNOWLEDGE:
-     * Volatility Indices (especially V75, V100): High continuous algorithmic volatility, clean structural trends, pristine Fair Value Gaps and order block reactions.
-     * Boom/Crash Indices: Steady stair-step trends with explosive opposite-direction tick spikes.
-     * 24/7 algorithmic execution, unaffected by real-world news prints. V75 is preferred for SMC due to balanced, high-precision movement.
+   - DERIV SYNTHETIC INDICES KNOWLEDGE (V75, V100, BOOM 1000, CRASH 500, STEP INDEX):
+     * 24/7 algorithmically generated indices with constant volatility profiles and zero fundamental news catalysts.
+     * Adapt sensitivity for algorithmic tick generation: identify pre-spike consolidation bases on Boom 1000 / Crash 500 inside HTF OBs and ±2.5σ mean-reversion volatility bands on Volatility 75 / 100.
 
-2. MULTI-TIMEFRAME ANALYSIS:
-   When user uploads 3 images (or when isMultiTimeframe is active):
-   - Image 1: 30-minute (entry precision)
-   - Image 2: 4-hour (structure)
-   - Image 3: 1-day (overall bias)
-   Always confirm all three timeframes and do top-down analysis. Focus entry detail especially on the 30M chart.
+2. 5-MODULE MULTI-FACTOR CONFLUENCE SCORING SYSTEM (0–100%):
+   A trade setup ONLY triggers a "High Probability" BUY/SELL alert when at least 3 of the following 5 modules align:
+   - Module 1 (SMC & ICT Framework): Automated detection of BOS, CHoCH, MSS across HTF (4H/1D) and LTF (15M/5M/1M); PD Arrays (Order Blocks, FVG, Mitigation/Breaker Blocks); BSL/SSL pools & Liquidity Sweeps/Judas Swings; ICT Killzones (London 02:00-05:00 EST, NY Open 07:00-10:00 EST, Silver Bullet 10:00-11:00 EST).
+   - Module 2 (Advanced Fibonacci Confluence): Dynamic Fib retracements from confirmed swing highs/lows; highlight ICT Optimal Trade Entry (OTE 0.618–0.786, with 0.705 as the institutional sweet spot); strictly filter Longs in Discount (<0.50 equilibrium) and Shorts in Premium (>0.50 equilibrium); project 1.272 (TP1), 1.618 (TP2), and 2.0 (TP3) Fibonacci Extensions.
+   - Module 3 (Institutional Candlestick & Price Action): Detect Bullish/Bearish Engulfing with volume expansion, Pin Bars/Hammer/Shooting Star sweeping liquidity, Three-Bar Reversals, Morning/Evening Stars, and Inside Bar breakouts SPECIFICALLY inside HTF POI zones (filter out standalone mid-range noise).
+   - Module 4 (Asset-Specific Quantitative Filters): CVD Divergences & OI flushes for Crypto Perpetuals; pre-spike bases & volatility bands for Synthetics; SMT correlation & Killzone weighting for Forex.
+   - Module 5 (Dynamic Risk & Execution Output): Exact Entry Zone (anchored at 0.705 OTE), Structural/ATR Stop Loss, and tiered TPs (1.272, 1.618, 2.0) with minimum 1:2.5 Risk-to-Reward ratio.
 
-3. MASTER-CLASS STRATEGIES + STRICT FILTERING:
-   - Full SMC/ICT: Order Blocks, BOS/CHOCH, FVG, Liquidity Voids/Vacuum Blocks, Supply/Demand, Fibonacci (0.618/0.786), Candlesticks.
-   - ICT Kill Zones, Silver Bullet, CRT, Judas Swing, AMD / Power of 3.
-   - ICT Silver Bullet: Time windows: London (3-4 AM EST), NY AM (10-11 AM EST — strongest), NY PM (2-3 PM EST). Focus on FVG + Liquidity Sweep during these windows. Align this on synthetics.
-   - STRICT FILTERING (Critical):
-     - ONLY give signals with 4+ strong confluences.
-     - Required: Order Block + Liquidity Void/FVG + Fib level + CRT/Judas Swing/AMD/Silver Bullet confirmation. If any of these core pillars is absent, or if total confluences are fewer than 4, you MUST set "tradeSetup.type" to "WAIT" and explain: "Insufficient confluence — stand aside and wait." in "tradeSetup.rationale".
-     - Prefer Buy Limit entries at strong zones. Do not suggest market entries unless clear displacement.
-     - First evaluate image quality for all three charts (30M, 4H, 1D). Set imageQuality.status to "failed" if any chart is blurry, cluttered, or lacks scale readability.
-     - Suggest live confirmation on TradingView for synthetic symbols (e.g. DERIV:VOLATILITY75, DERIV:VOLATILITY100).
-     - Be extremely precise, conservative, and educational. Quality over quantity. If confluences are insufficient, explain: "Insufficient confluence — stand aside and wait." in tradeSetup.rationale.
-
-4. COMPUTER VISION AI SCANNER:
-   In detailedVisualDescription, explain how the AI scanner registers and drafts the annotation elements on the 30M entry chart:
-   - Order Blocks (shaded rectangles).
-   - Liquidity Voids (dashed purple boundaries).
-   - Vacuum Blocks (faded gradient boxes).
-   - Fib lines (horizontal levels).
-   - CRT ranges (bracketed highs and lows).
-   - Judas Swing (false breakout sweep markers).
-   - AMD phases (Accumulation box, Manipulation sweep, Distribution vector).
-   - Silver Bullet FVGs (highlighted zones).
-   - Entry (cyan limit line), stop-loss SL (red line), and take-profits TP1/TP2 (green lines).
-
-5. PRECISION SETUP OUTPUT (Must Follow):
-   Structure your detailed technical fields (detailedVisualDescription, htfBias1D, intermediateStructure4H, entryPrecision30M, and tradeSetup.rationale) to integrate and cover this exact sequence:
-   1. Image Quality Assessment (30M / 4H / 1D)
-   2. 1D Higher Timeframe Bias
-   3. 4H Structure & Key Confluences
-   4. 30M Entry Precision (Buy Limit preferred)
-   5. Overall Confluence Score + Final Recommendation (referencing past similar trades if available)
-   6. Risk Warning: Max 1% risk per trade. This is educational only.
-
-6. Tailor action-focused DOs and DON'Ts specifically to this index (e.g. Volatility 75 wide stop warnings, Crash/Boom spike avoidance rules).
- 
 You MUST respond strictly with a valid JSON object matching this schema. Do not add any extra explanation text, markdown code-blocks (\`\`\`json) or text before/after the JSON. Just return the raw JSON:
  
 {
@@ -353,11 +317,14 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
   },
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
   "marketStructure": "A brief structural description (e.g. Bullish Break of Structure (BOS) on H1, Liquidity swept, or Bearish CHoCH)",
-  "confluenceScore": 3.0,
+  "confluenceScore": 4.5,
+  "confluenceScorePct": 88,
+  "alignedModulesCount": 4,
+  "confluenceFormula": "HTF Order Block + 0.705 OTE + SSL Sweep + POI Engulfing = 88% Confluence",
   "antiStopLossShield": {
     "structuralInvalidationPrice": 1.0820,
     "bufferPipsApplied": 5.0,
-    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + buffer rather than obvious retail swing wick to avoid stop hunts",
+    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + ATR buffer rather than obvious retail swing wick to avoid stop hunts",
     "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
   },
   "killZone": {
@@ -399,14 +366,14 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
   },
   "suggestedRisk": "Tailored volatility-adjusted risk. Emphasize 1% max risk, wider stops, or lot size reduction based on indicators.",
   "doActions": [
-    "Wait for price to retrace cleanly into the fresh H1 Demand Order Block before launching operations.",
-    "Ensure lot size is scaled down 50% to account for V75 high-range variance.",
-    "Take 50% off of the table at TP1 and move SL to break-even."
+    "Wait for price to retrace cleanly into the fresh H1 Demand Order Block + 0.705 OTE before launching operations.",
+    "Ensure lot size is scaled down 50% to account for high-range variance.",
+    "Take 50% off of the table at TP1 (1.272 Fib Extension) and move SL to break-even."
   ],
   "dontActions": [
-    "Do NOT chase vertical spikes on Boom/Crash; let price structure rebuild first.",
+    "Do NOT chase vertical spikes on Boom/Crash; let pre-spike consolidation base form inside HTF OB first.",
     "Do NOT widen the red stop-loss level once trade is active.",
-    "Do NOT engage if confluence elements drop below 3 structural supports."
+    "Do NOT engage if fewer than 3 of the 5 quantitative modules align."
   ],
   "detailedVisualDescription": "A technical step-by-step reasoning summary of what your Computer Vision/YOLO scanner detected on the original MT4/MT5 image.",
   "orderBlock": {
@@ -432,20 +399,24 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
     "context": "Contextual mechanical analysis of this pattern near the SMC zones"
   },
   "fibonacciRetracement": {
-    "level_50": 0.50,
-    "level_618": 0.618,
-    "level_786": 0.786,
-    "description": "How the fibonacci levels align with the SMC or structural zones identified (e.g., Golden pocket overlaps 4H Demand OB)"
+    "level_50": 1550.00,
+    "level_618": 1545.00,
+    "level_705": 1541.50,
+    "level_786": 1538.00,
+    "ext_1272": 1590.00,
+    "ext_1618": 1610.00,
+    "ext_2000": 1635.00,
+    "description": "How the fibonacci OTE (0.618-0.786, 0.705 sweet spot) and extensions align with the SMC zones identified"
   },
   "tradeSetup": {
     "type": "BUY" | "SELL" | "WAIT",
-    "entry": 1560.50,
-    "stopLoss": 1538.00,
+    "entry": 1541.50,
+    "stopLoss": 1528.00,
     "takeProfits": [1590.00, 1610.00, 1635.00],
     "riskRewardRatio": "1:3.2",
-    "rationale": "High probability trigger events (e.g., Retracement to Demand zone, liquidity sweep confirmation)"
+    "rationale": "High probability trigger events (e.g., Retracement to 0.705 OTE Demand zone, liquidity sweep confirmation)"
   },
-  "educationalInsight": "A high-value lesson about this synthetic index behavior, spikes, or typical SMC pitfalls to avoid."
+  "educationalInsight": "A high-value lesson about this asset behavior, spikes, or typical SMC pitfalls to avoid."
 }`;
 
     const textPart = {

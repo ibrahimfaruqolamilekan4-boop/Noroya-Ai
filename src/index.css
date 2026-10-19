@@ -1,18 +1,21 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Space Grotesk", sans-serif;
+  --font-display: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
-/* Base custom styles to reinforce a cyberpunk-industrial, ultra-clean design */
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #0B0E14;
+  color: #F1F5F9;
   font-family: var(--font-sans);
   overflow-x: hidden;
+}
+
+.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Custom scrollbars */
@@ -22,32 +25,30 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #0B0E14;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #1E293B;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #334155;
 }
 
-/* Custom animations and glow effects */
 .glow-green {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 24px rgba(16, 185, 129, 0.14);
 }
 
 .glow-red {
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+  box-shadow: 0 0 24px rgba(244, 63, 94, 0.14);
 }
 
 .glow-cyan {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 24px rgba(6, 182, 212, 0.14);
 }
 
-/* Keyframes for pulse */
 @keyframes scanning {
   0% { transform: translateY(-100%); }
   100% { transform: translateY(100%); }
