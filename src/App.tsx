@@ -55,7 +55,7 @@ const compressImage = async (dataUrl: string, maxWidth = 1000, quality = 0.5): P
 
 export default function App() {
   const [currentRoute, setCurrentRoute] = useState<"landing" | "dashboard">(() => {
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/dashboard")) {
+    if (typeof window !== "undefined" && (window.location.pathname.startsWith("/dashboard") || window.location.hash === "#dashboard")) {
       return "dashboard";
     }
     return "landing";
@@ -68,6 +68,51 @@ export default function App() {
   const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
   const [timeframe, setTimeframe] = useState<string>("H1");
   const [customSymbolText, setCustomSymbolText] = useState("");
+
+  const navigateToDashboard = () => {
+    setCurrentRoute("dashboard");
+    try {
+      if (typeof window !== "undefined" && window.location.pathname !== "/dashboard") {
+        window.history.pushState({ route: "dashboard" }, "", "/dashboard");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      // Fallback for restricted iframe history contexts
+    }
+  };
+
+  const navigateToLanding = () => {
+    setCurrentRoute("landing");
+    try {
+      if (typeof window !== "undefined" && window.location.pathname !== "/") {
+        window.history.pushState({ route: "landing" }, "", "/");
+      }
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch {
+      // Fallback for restricted iframe history contexts
+    }
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (window.location.pathname.startsWith("/dashboard") || window.location.hash === "#dashboard") {
+        setCurrentRoute("dashboard");
+      } else {
+        setCurrentRoute("landing");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  useEffect(() => {
+    cacheChartStateToSW({
+      ticker: symbol.ticker,
+      timeframe,
+      route: currentRoute,
+      updatedAt: Date.now(),
+    });
+  }, [symbol, timeframe, currentRoute]);
 
   // Upload state
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -1309,10 +1354,6 @@ export default function App() {
                   timeframe={timeframe}
                   aiAnalysisResult={analysisResult}
                   onSyncLevelsToWorkspace={(levels) => {
-                    setEntryPrice(levels.entry.toString());
-                    setStopLossPrice(levels.stopLoss.toString());
-                    setTakeProfitPrice(levels.tp2.toString());
-                    setCalcDirection(levels.tp2 >= levels.entry ? "BUY" : "SELL");
                     setActiveLevels({
                       entry: levels.entry,
                       stopLoss: levels.stopLoss,
@@ -2369,8 +2410,14 @@ export default function App() {
         {activeTab === "calculator" && (
           <div className="space-y-6">
             <RiskCalculator 
-              selectedSymbolTicker={analysisResult ? (customSymbolText ? "CUSTOM" : symbol.ticker) : undefined}
-              initialStopLossPoints={analysisResult ? Math.abs((analysisResult.tradeSetup?.entry || 0) - (analysisResult.tradeSetup?.stopLoss || 0)) : undefined}
+              selectedSymbolTicker={customSymbolText ? "CUSTOM" : symbol.ticker}
+              initialStopLossPoints={
+                activeLevels.entry && activeLevels.stopLoss
+                  ? Math.abs(activeLevels.entry - activeLevels.stopLoss)
+                  : analysisResult
+                  ? Math.abs((analysisResult.tradeSetup?.entry || 0) - (analysisResult.tradeSetup?.stopLoss || 0))
+                  : undefined
+              }
             />
 
             {/* Educational content for trading synthetics */}
