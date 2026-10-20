@@ -50,6 +50,8 @@ import { cacheChartStateToSW } from "./lib/usePWAInstall";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getUserLearnings } from "./lib/firebaseChat";
+import { useMarketData } from "./hooks/useMarketData";
+import { formatPrice } from "./lib/quantEngine";
 
 const compressImage = async (
   dataUrl: string,
@@ -101,6 +103,9 @@ export default function App() {
   const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
   const [timeframe, setTimeframe] = useState<string>("H1");
   const [customSymbolText, setCustomSymbolText] = useState("");
+
+  // Live Multi-Provider WebSocket Ingestion (Bybit Linear V5 + Deriv Public WS)
+  const { latestCandle, futuresTelemetry, telemetry } = useMarketData(symbol, timeframe);
 
   const navigateToDashboard = () => {
     setCurrentRoute("dashboard");
@@ -813,6 +818,40 @@ export default function App() {
         </div>
       </header>
 
+      {/* LIVE MARKET INGESTION TELEMETRY STRIP */}
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-2">
+        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-semibold">
+              <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+              <span>{telemetry.provider}</span>
+            </div>
+            <span className="text-[11px] font-mono text-slate-500">
+              Latency: <strong className="text-slate-800">{telemetry.latencyMs}ms</strong>
+            </span>
+            <span className="text-slate-300 hidden sm:inline">·</span>
+            <span className="text-[11px] font-mono text-slate-600 hidden sm:inline">
+              Ticker: <strong className="text-slate-900">{symbol.ticker} ({timeframe})</strong>
+            </span>
+            <span className="text-slate-300 hidden sm:inline">·</span>
+            <span className="text-[11px] font-mono text-slate-600">
+              Spot: <strong className="text-emerald-700">{latestCandle ? formatPrice(latestCandle.close, symbol) : formatPrice(symbol.defaultPrice, symbol)}</strong>
+            </span>
+          </div>
+
+          {symbol.marketType === "CRYPTO_PERP" && (futuresTelemetry || symbol.futuresMetrics) && (
+            <div className="flex items-center gap-2 font-mono text-[11px]">
+              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+                FR: {futuresTelemetry ? `${(futuresTelemetry.fundingRate * 100).toFixed(4)}%` : symbol.futuresMetrics?.fundingRate}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-semibold hidden md:inline">
+                OI: {futuresTelemetry && futuresTelemetry.openInterestValue > 0 ? `$${(futuresTelemetry.openInterestValue / 1e9).toFixed(2)}B` : symbol.futuresMetrics?.openInterestUsd}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* MAIN WORKSPACE CONTENT */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* ==========================================
@@ -1272,6 +1311,7 @@ export default function App() {
               {analyzerSubTab === "live_feed" && (
                 <LiveTradingViewChart
                   symbol={symbol}
+                  timeframe={timeframe}
                   analysisResult={analysisResult}
                   currentWorkspaceLevels={activeLevels}
                   onSyncLevels={(levels) => setActiveLevels(levels)}

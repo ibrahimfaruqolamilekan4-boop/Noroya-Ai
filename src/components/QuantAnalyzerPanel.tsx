@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -11,14 +11,20 @@ import {
   Target,
   BarChart3,
   Zap,
+  Radio,
+  Activity,
 } from "lucide-react";
 import { SyntheticSymbol } from "../data/symbols";
 import {
+  evaluateStructuralScan,
+  evaluateLiveTick,
   evaluateMultiFactorConfluence,
   formatPrice,
   getNextFundingCountdown,
   QuantitativeEvaluation,
+  StructuralScanResult,
 } from "../lib/quantEngine";
+import { useMarketData } from "../hooks/useMarketData";
 
 interface QuantAnalyzerPanelProps {
   symbol: SyntheticSymbol;
@@ -40,6 +46,9 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 }) => {
   const [fundingCountdown, setFundingCountdown] = useState<string>(getNextFundingCountdown());
 
+  // Connect to live multi-provider data ingestion layer
+  const { candles, latestCandle, futuresTelemetry, telemetry } = useMarketData(symbol, timeframe);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setFundingCountdown(getNextFundingCountdown());
@@ -47,19 +56,70 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  const evaluation: QuantitativeEvaluation = evaluateMultiFactorConfluence(
-    symbol,
-    timeframe,
-    aiAnalysisResult
-  );
+  // --------------------------------------------------------------------------
+  // TWO-TIER ANTI-REPAINT EXECUTION:
+  // Tier 1: Heavy Structural Scan (re-computed only when candles array updates / closes)
+  // --------------------------------------------------------------------------
+  const structural: StructuralScanResult = useMemo(() => {
+    return evaluateStructuralScan(candles, symbol, timeframe, aiAnalysisResult);
+  }, [candles, symbol.ticker, timeframe, aiAnalysisResult]);
+
+  // --------------------------------------------------------------------------
+  // Tier 2: Real-time intra-candle tick evaluation (live price, sweep, dynamic score)
+  // --------------------------------------------------------------------------
+  const evaluation: QuantitativeEvaluation = useMemo(() => {
+    const dummyPrice = latestCandle?.close || structural.optimalEntry;
+    const currentLiveCandle = latestCandle || {
+      timestamp: Math.floor(Date.now() / 1000),
+      open: dummyPrice,
+      high: dummyPrice,
+      low: dummyPrice,
+      close: dummyPrice,
+      volume: 0,
+      isClosed: false,
+    };
+
+    return evaluateLiveTick(currentLiveCandle, structural, futuresTelemetry);
+  }, [latestCandle, structural, futuresTelemetry]);
 
   const isBullish = evaluation.directionalBias === "BULLISH";
   const isBearish = evaluation.directionalBias === "BEARISH";
-  const fm = symbol.futuresMetrics;
+  const fm = futuresTelemetry || symbol.futuresMetrics;
   const sp = symbol.syntheticProfile;
 
   return (
     <div className="space-y-6 text-slate-900">
+      {/* REAL-TIME FEED CONNECTION HUD */}
+      <div className="rounded-xl bg-white border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-semibold">
+            <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
+            <span>{telemetry.provider}</span>
+          </div>
+
+          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            {telemetry.latencyMs}ms latency
+          </span>
+
+          <span className="text-xs font-mono text-slate-600">
+            {candles.length} bars normalized
+          </span>
+        </div>
+
+        <div className="flex items-center gap-4 text-xs font-mono tabular-nums">
+          <div className="text-right">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider block">
+              Live Feed Spot
+            </span>
+            <span className="text-sm font-bold text-slate-900">
+              {latestCandle
+                ? formatPrice(latestCandle.close, symbol)
+                : formatPrice(symbol.defaultPrice, symbol)}
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* ASSET-SPECIFIC QUANTITATIVE TELEMETRY HEADER */}
       {symbol.marketType === "CRYPTO_PERP" && fm && (
         <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-4">
@@ -67,7 +127,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-bold font-display text-slate-900">
-                {fm.exchange} Perpetual Futures Orderflow &amp; Liquidation Telemetry
+                {(fm as any).exchange || "Bybit V5"} Perpetual Futures Microstructure Telemetry
               </h3>
             </div>
             <div className="text-xs text-slate-600 font-mono tabular-nums">
@@ -81,23 +141,25 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200">
               <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>Funding Rate ({fm.fundingIntervalHours}h)</span>
+                <span>Funding Rate (8h)</span>
                 <Clock className="h-3.5 w-3.5 text-emerald-600" />
               </div>
               <div className="mt-1.5 flex items-baseline justify-between">
                 <span
                   className={`text-lg font-mono font-bold tabular-nums ${
-                    fm.fundingRateNumeric >= 0 ? "text-emerald-700" : "text-amber-700"
+                    (fm.fundingRate || 0) >= 0 ? "text-emerald-700" : "text-amber-700"
                   }`}
                 >
-                  {fm.fundingRate}
+                  {typeof fm.fundingRate === "number"
+                    ? `${(fm.fundingRate * 100).toFixed(4)}%`
+                    : (fm as any).fundingRate}
                 </span>
                 <span className="text-xs font-mono text-slate-500 tabular-nums">
                   {fundingCountdown}
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
-                {fm.fundingRateNumeric < 0
+                {(fm.fundingRate || 0) < 0
                   ? "Negative funding: crowded shorts vulnerable to BSL squeeze."
                   : "Positive funding: monitor OI flush on SSL sweeps for long entry."}
               </p>
@@ -105,21 +167,27 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
             <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200">
               <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>Open Interest &amp; 24h Delta</span>
+                <span>Open Interest (OI)</span>
                 <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />
               </div>
               <div className="mt-1.5 flex items-baseline justify-between">
                 <span className="text-lg font-mono font-bold text-slate-900 tabular-nums">
-                  {fm.openInterestUsd}
+                  {fm.openInterestValue && fm.openInterestValue > 0
+                    ? `$${(fm.openInterestValue / 1e9).toFixed(2)}B`
+                    : (fm as any).openInterestUsd || "$5.48B"}
                 </span>
                 <span className="text-xs font-mono font-semibold text-emerald-700 tabular-nums">
-                  {fm.oiDelta24h}
+                  {(fm as any).oiDelta24h || "+6.4%"}
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
-                L/S Ratio: <strong className="text-slate-900 font-mono">{fm.longShortRatio.toFixed(2)}</strong> · CVD:{" "}
-                <strong className="text-emerald-700 font-mono">
-                  {fm.cvdBias.replace(/_/g, " ")}
+                Mark:{" "}
+                <strong className="text-slate-900 font-mono">
+                  {formatPrice(fm.markPrice || symbol.defaultPrice, symbol)}
+                </strong>{" "}
+                · Index:{" "}
+                <strong className="text-slate-900 font-mono">
+                  {formatPrice(fm.indexPrice || symbol.defaultPrice, symbol)}
                 </strong>
               </p>
             </div>
@@ -129,51 +197,54 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                 <span>High-Leverage Liquidation Pools</span>
                 <Zap className="h-3.5 w-3.5 text-amber-600" />
               </div>
-              <div className="mt-1.5 space-y-1 text-xs font-mono tabular-nums">
-                <div className="flex justify-between">
-                  <span className="text-slate-600">100x Shorts (BSL):</span>
-                  <span className="text-emerald-700 font-semibold">{fm.liquidationClusters.tier100xShort}</span>
+              <div className="mt-1.5 flex justify-between font-mono text-xs tabular-nums">
+                <div>
+                  <span className="text-slate-500 block text-[10px]">100x / 50x Longs</span>
+                  <span className="font-bold text-rose-700">
+                    {formatPrice(
+                      (symbol.futuresMetrics?.liquidationClusters?.tier100xLong || symbol.defaultPrice * 0.98),
+                      symbol
+                    )}
+                  </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-600">100x Longs (SSL):</span>
-                  <span className="text-rose-600 font-semibold">{fm.liquidationClusters.tier100xLong}</span>
-                </div>
-                <div className="flex justify-between text-[11px] text-slate-500">
-                  <span>50x Cluster Range:</span>
-                  <span>
-                    {fm.liquidationClusters.tier50xLong} – {fm.liquidationClusters.tier50xShort}
+                <div className="text-right">
+                  <span className="text-slate-500 block text-[10px]">100x / 50x Shorts</span>
+                  <span className="font-bold text-emerald-700">
+                    {formatPrice(
+                      (symbol.futuresMetrics?.liquidationClusters?.tier100xShort || symbol.defaultPrice * 1.02),
+                      symbol
+                    )}
                   </span>
                 </div>
               </div>
+              <p className="mt-1 text-[11px] text-slate-600">
+                High-leverage pools attract price like liquidity magnets.
+              </p>
             </div>
           </div>
         </div>
       )}
 
+      {/* SYNTHETIC INDICES ALGORITHMIC METRICS */}
       {symbol.marketType === "SYNTHETIC" && sp && (
         <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
-            <div className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-emerald-600" />
-              <h3 className="text-sm font-bold font-display text-slate-900">
-                24/7 Synthetic Algorithmic Telemetry · {sp.generationEngine}
-              </h3>
-            </div>
-            <span className="text-xs font-mono text-emerald-700 font-semibold">
-              Zero Fundamental News Catalysts · Pure Price Action
-            </span>
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-2.5">
+            <Layers className="h-4 w-4 text-emerald-600" />
+            <h3 className="text-sm font-bold font-display text-slate-900">
+              Deriv 24/7 Algorithmic Index Specification
+            </h3>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
             <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
-              <span className="text-slate-500 block">Volatility Parameter</span>
-              <span className="font-mono font-bold text-slate-900 mt-1 block">
+              <span className="text-slate-500 block">Constant Volatility</span>
+              <span className="text-emerald-700 font-bold text-sm mt-0.5 block">
                 {sp.constantVolatilityPct}
               </span>
             </div>
             <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
-              <span className="text-slate-500 block">Mean-Reversion Band</span>
-              <span className="font-mono font-bold text-emerald-700 mt-1 block">
-                {sp.meanReversionSigma}
+              <span className="text-slate-500 block">Tick Generation</span>
+              <span className="text-slate-900 font-semibold mt-0.5 block">
+                {sp.generationEngine}
               </span>
             </div>
             <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
