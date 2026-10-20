@@ -1,31 +1,21 @@
 import React, { useState, useEffect, useRef } from "react";
-import { 
-  Send, 
-  Sparkles, 
-  Trash2, 
-  GraduationCap, 
-  ChevronRight, 
-  BrainCircuit, 
-  BookOpen, 
-  FolderLock, 
-  Calendar,
+import {
+  Send,
+  Sparkles,
+  GraduationCap,
+  BrainCircuit,
   X,
   PlusCircle,
-  Clock,
-  ExternalLink,
-  ChevronDown,
-  RefreshCcw,
   Loader2,
-  CheckCircle2,
-  Lightbulb
+  Lightbulb,
 } from "lucide-react";
-import { 
-  getChatHistory, 
-  saveChatMessage, 
-  getUserLearnings, 
+import {
+  getChatHistory,
+  saveChatMessage,
+  getUserLearnings,
   saveUserLearning,
   ChatMessage,
-  UserLearningItem 
+  UserLearningItem,
 } from "../lib/firebaseChat";
 import { auth as firebaseAuth } from "../lib/firebase";
 
@@ -36,21 +26,24 @@ interface ChatSidebarProps {
   onClose?: () => void;
 }
 
-export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbol, onClose }: ChatSidebarProps) {
+export default function ChatSidebar({
+  currentAnalysis,
+  tradeHistory,
+  activeSymbol,
+  onClose,
+}: ChatSidebarProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [educationalMode, setEducationalMode] = useState(true);
   const [activeTab, setActiveTab] = useState<"chat" | "learnings">("chat");
 
-  // Learnings form state
   const [learnings, setLearnings] = useState<UserLearningItem[]>([]);
   const [learningText, setLearningText] = useState("");
   const [learningCategory, setLearningCategory] = useState("Structure");
   const [learningSymbol, setLearningSymbol] = useState("V75");
   const [isSavingLearning, setIsSavingLearning] = useState(false);
 
-  // Diagram Synthesizer overlay trigger
   const [imageModalUrl, setImageModalUrl] = useState<string | null>(null);
   const [isGeneratingDiagram, setIsGeneratingDiagram] = useState(false);
   const [diagramSubject, setDiagramSubject] = useState("Bullish Order Block Shift");
@@ -58,7 +51,6 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
   const messageEndRef = useRef<HTMLDivElement>(null);
   const isMounted = useRef(true);
 
-  // Loading existing user history from Firestore
   useEffect(() => {
     isMounted.current = true;
     loadHistory();
@@ -69,15 +61,15 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
 
   const loadHistory = async () => {
     if (!firebaseAuth.currentUser) {
-      // Fallback: Default welcoming messages if offline/guest
       setMessages([
         {
           id: "welcome-1",
           userId: "guest",
           sender: "bot",
-          message: "Greetings, cadet! I am your AI SMC Copilot. Log in to save your charts, trade histories, and personal lessons to our persistent cloud architecture.",
-          created_at: new Date()
-        }
+          message:
+            "Welcome to QuantSMC Copilot. Ask about market structure, ICT Killzones, 0.705 OTE retracements, Crypto Perpetuals CVD/OI flushes, or Synthetic Indices spike bases.",
+          created_at: new Date(),
+        },
       ]);
       return;
     }
@@ -85,21 +77,21 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
     try {
       const historyMsg = await getChatHistory();
       const learningLogs = await getUserLearnings();
-      
+
       if (isMounted.current) {
         setLearnings(learningLogs);
         if (historyMsg.length > 0) {
           setMessages(historyMsg);
         } else {
-          // Welcome default
           setMessages([
             {
               id: "welcome-1",
               userId: firebaseAuth.currentUser.uid,
               sender: "bot",
-              message: "Welcome back! I am synced with your Firestore journal logs. Ask me anything about Synthetic Indices, test yourself with an SMC Quiz (Educational Mode active), or tap the **Wand element** below to synthesize diagrams.",
-              created_at: new Date()
-            }
+              message:
+                "Synced with your Firestore journal logs. Ask about Forex Killzones, Synthetic Indices, or Crypto Perpetuals orderflow.",
+              created_at: new Date(),
+            },
           ]);
         }
       }
@@ -108,7 +100,6 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
     }
   };
 
-  // Scroll bottom
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isSending]);
@@ -122,41 +113,40 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
       setInputText("");
     }
 
-    // Append user message instantly
     const userMsg: ChatMessage = {
       id: Math.random().toString(),
       userId: firebaseAuth.currentUser?.uid || "guest",
       sender: "user",
       message: queryStr,
-      created_at: new Date()
+      created_at: new Date(),
     };
-    
-    setMessages(prev => [...prev, userMsg]);
+
+    setMessages((prev) => [...prev, userMsg]);
     setIsSending(true);
 
-    // Save user message to Firestore asynchronously without blocking chat response
-    saveChatMessage(queryStr, "user").catch((e) => console.warn("Firestore save message error:", e));
+    saveChatMessage(queryStr, "user").catch((e) =>
+      console.warn("Firestore save message error:", e)
+    );
 
     try {
-      // Fetch user understandings
       const plainLearnings = learnings.map((l) => l.learnings);
 
-      // Only attach chart image if reasonably sized (< 1.5MB) to prevent Vercel/network 413 drops
       let safeChartImage: string | null = null;
-      if (currentAnalysis?.image_url && typeof currentAnalysis.image_url === "string" && currentAnalysis.image_url.length < 1500000) {
+      if (
+        currentAnalysis?.image_url &&
+        typeof currentAnalysis.image_url === "string" &&
+        currentAnalysis.image_url.length < 1500000
+      ) {
         safeChartImage = currentAnalysis.image_url;
       }
 
-      // Call Chat-Bot API
-      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
       const res = await fetch(`/api/chat-bot?_t=${Date.now()}`, {
         method: "POST",
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          ...(customKey ? { "x-gemini-key": customKey } : {}),
+          Pragma: "no-cache",
         },
         body: JSON.stringify({
           prompt: queryStr,
@@ -189,7 +179,9 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
       };
 
       setMessages((prev) => [...prev, botMsg]);
-      saveChatMessage(botReply, "bot").catch((e) => console.warn("Firestore save bot reply error:", e));
+      saveChatMessage(botReply, "bot").catch((e) =>
+        console.warn("Firestore save bot reply error:", e)
+      );
     } catch (err: any) {
       console.error("AI Copilot request error:", err);
       setMessages((prev) => [
@@ -198,7 +190,7 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
           id: Math.random().toString(),
           userId: "bot",
           sender: "bot",
-          message: `⚠️ Connection notice: ${err.message || "Please check your network connection or verify GEMINI_API_KEY in Settings."}`,
+          message: `Connection notice: ${err.message || "Please check your network connection."}`,
           created_at: new Date(),
         },
       ]);
@@ -220,17 +212,19 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
       );
 
       if (savedItem) {
-        setLearnings(prev => [savedItem, ...prev]);
+        setLearnings((prev) => [savedItem, ...prev]);
         setLearningText("");
-        
-        // Notify chat bot sidebar memory updated
-        setMessages(prev => [...prev, {
-          id: Math.random().toString(),
-          userId: "bot",
-          sender: "bot",
-          message: `💡 **SMC Memory Sync**: I have logged your customized rule: *"${savedItem.learnings}"* under symbols context: **${savedItem.symbol}**. I will respect this rule for all future on-screen trade analysis!`,
-          created_at: new Date()
-        }]);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Math.random().toString(),
+            userId: "bot",
+            sender: "bot",
+            message: `SMC Memory Sync: Logged custom rule "${savedItem.learnings}" under ${savedItem.symbol}.`,
+            created_at: new Date(),
+          },
+        ]);
       }
     } catch (err) {
       console.error(err);
@@ -239,46 +233,41 @@ export default function ChatSidebar({ currentAnalysis, tradeHistory, activeSymbo
     }
   };
 
-  // Synthesize custom SMC vector illustration
   const handleGenerateDiagram = async () => {
     setIsGeneratingDiagram(true);
     try {
-      const customKey = localStorage.getItem("custom_gemini_api_key") || "";
       const res = await fetch(`/api/generate-educational-image?_t=${Date.now()}`, {
         method: "POST",
         cache: "no-store",
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-cache, no-store, must-revalidate",
-          "Pragma": "no-cache",
-          ...(customKey ? { "x-gemini-key": customKey } : {})
+          Pragma: "no-cache",
         },
         body: JSON.stringify({
           subject: diagramSubject,
-          explanation: `SMC concepts illustrating support, wicks, zones, and entry biases for synthetic volatility study.`
-        })
+          explanation: `SMC concepts illustrating support, wicks, zones, and entry biases for quantitative study.`,
+        }),
       });
       const parsed = await res.json();
       if (!res.ok || !parsed.success) {
         throw new Error(parsed.error || "Failed to draft custom SVG.");
       }
 
-      // Append image reference bubble to conversational thread!
-      const diagramMessageText = `🎨 **Synthesized Educational Diagram**: [${diagramSubject}]
-This diagram was custom built by Gemini modeling engine. Use it to study ideal mechanical placements.
-[Tap to zoom view details]`;
+      const diagramMessageText = `Synthesized Educational Diagram: [${diagramSubject}]\nTap to inspect schematic details.`;
 
-      setMessages(prev => [...prev, {
-        id: Math.random().toString(),
-        userId: "bot",
-        sender: "bot",
-        message: diagramMessageText,
-        created_at: new Date()
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(),
+          userId: "bot",
+          sender: "bot",
+          message: diagramMessageText,
+          created_at: new Date(),
+        },
+      ]);
 
-      // Direct triggers zoom overlay
       setImageModalUrl(parsed.imageUrl);
-
     } catch (err: any) {
       console.error("Failed to generate diagram:", err);
       if (isMounted.current) {
@@ -288,7 +277,7 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
             id: Math.random().toString(),
             userId: "bot",
             sender: "bot",
-            message: `⚠️ Synthesis failed: ${err.message || "Please check connection configuration and retry."}`,
+            message: `Synthesis failed: ${err.message || "Please retry."}`,
             created_at: new Date(),
           },
         ]);
@@ -298,86 +287,84 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
     }
   };
 
-  // Clear Chat History logs locally and in Firestore rules
   const handleClearHistory = () => {
-    if (window.confirm("Erase chat session logs from Firestore? This clears your context memory.")) {
+    if (window.confirm("Erase chat session logs?")) {
       setMessages([
         {
           id: "welcome-re",
           userId: "bot",
           sender: "bot",
-          message: "Conversation context flushed. Fresh SMC matrices loaded! Ask a question or request a quiz.",
-          created_at: new Date()
-        }
+          message: "Conversation context reset. Ask any SMC or multi-asset question.",
+          created_at: new Date(),
+        },
       ]);
     }
   };
 
   return (
-    <div className="flex flex-col h-full bg-white/95 border-l border-slate-200/90 w-full relative" id="chat-sidebar-workspace">
-      
+    <div
+      className="flex flex-col h-full bg-white border-l border-slate-200 w-full relative text-slate-900"
+      id="chat-sidebar-workspace"
+    >
       {/* HEADER CONTROLS */}
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80 sticky top-0 z-12">
-        <div className="flex items-center gap-2">
-          <BrainCircuit className="h-5 w-5 text-cyan-400 animate-pulse" />
+      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
+            <BrainCircuit className="h-4 w-4 text-emerald-600" />
+          </div>
           <div>
-            <h3 className="text-xs font-semibold text-slate-900 uppercase tracking-wider font-display">SMC AI Mentor</h3>
-            <p className="text-[10px] text-slate-600">Contextual Trading Companion</p>
+            <h3 className="text-xs font-bold text-slate-900 font-display">
+              QuantSMC AI Mentor
+            </h3>
+            <p className="text-[11px] text-slate-500">Contextual Quantitative Companion</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {onClose && (
-            <button 
-              onClick={onClose} 
-              className="lg:hidden p-1.5 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 text-slate-500 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* TABS NAVIGATION */}
-      <div className="grid grid-cols-2 bg-slate-50 border-b border-slate-850 text-xs">
+      <div className="grid grid-cols-2 bg-[#F8FAF9] border-b border-slate-200 text-xs">
         <button
           onClick={() => setActiveTab("chat")}
-          className={`py-3 text-center font-bold tracking-wider transition border-b-2 cursor-pointer uppercase ${
-            activeTab === "chat" 
-              ? "text-cyan-400 border-cyan-500 bg-cyan-950/10" 
-              : "text-slate-500 border-transparent hover:text-slate-700"
+          className={`py-2.5 text-center font-semibold transition border-b-2 cursor-pointer ${
+            activeTab === "chat"
+              ? "text-emerald-700 border-emerald-600 bg-white"
+              : "text-slate-500 border-transparent hover:text-slate-900"
           }`}
         >
-          AI Chat Room
+          AI Desk Chat
         </button>
         <button
           onClick={() => setActiveTab("learnings")}
-          className={`py-3 text-center font-bold tracking-wider transition border-b-2 cursor-pointer uppercase ${
-            activeTab === "learnings" 
-              ? "text-indigo-400 border-indigo-505 bg-indigo-950/10" 
-              : "text-slate-500 border-transparent hover:text-slate-700"
+          className={`py-2.5 text-center font-semibold transition border-b-2 cursor-pointer ${
+            activeTab === "learnings"
+              ? "text-emerald-700 border-emerald-600 bg-white"
+              : "text-slate-500 border-transparent hover:text-slate-900"
           }`}
         >
-          My SMC Rules Setup ({learnings.length})
+          Custom Rules ({learnings.length})
         </button>
       </div>
 
       {/* CORE SCREENS SCROLL SCENE */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[calc(100vh-180px)]">
-        
-        {/* ROOM TAB SCREEN */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[calc(100vh-180px)] bg-[#F8FAF9]">
         {activeTab === "chat" && (
           <div className="space-y-4 flex flex-col justify-end min-h-full">
-            
-            {/* Top widgets controls: Quiz shortcuts & Educational toggler */}
             <div className="bg-white border border-slate-200 p-3.5 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                  <GraduationCap className="h-4 w-4 text-indigo-400" />
-                  <span>Educational Quizzer</span>
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+                  <GraduationCap className="h-4 w-4 text-emerald-600" />
+                  <span>Quick Institutional Prompts</span>
                 </div>
-                
-                {/* Educational toggle switch */}
+
                 <label className="relative inline-flex items-center cursor-pointer select-none">
                   <input
                     type="checkbox"
@@ -385,9 +372,9 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                     onChange={() => setEducationalMode(!educationalMode)}
                     className="sr-only peer"
                   />
-                  <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-400 after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-checked:after:bg-cyan-400"></div>
-                  <span className="ml-2 text-[10px] text-slate-600 uppercase font-mono">
-                    {educationalMode ? "Study ON" : "Tactical ON"}
+                  <div className="w-8 h-4 bg-slate-200 rounded-full peer peer-checked:bg-emerald-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:after:translate-x-4"></div>
+                  <span className="ml-2 text-[11px] text-slate-600 font-mono">
+                    {educationalMode ? "Prompts" : "Minimal"}
                   </span>
                 </label>
               </div>
@@ -395,79 +382,87 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
               {educationalMode && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   <button
-                    onClick={() => handleSendMessage(undefined, "How do I prevent my Stop Loss from getting hunted/swept on currency pairs?")}
-                    className="p-1 px-2.5 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-[10px] text-rose-500 font-bold rounded-full transition cursor-pointer"
+                    onClick={() =>
+                      handleSendMessage(
+                        undefined,
+                        "How do I prevent my Stop Loss from getting swept on Forex & Gold?"
+                      )
+                    }
+                    className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
                   >
-                    🛡️ Stop Loss Protection Guide
+                    Stop Loss Protection
                   </button>
                   <button
-                    onClick={() => handleSendMessage(undefined, "Explain EUR/USD London Judas Swing manipulation and Asian liquidity sweeps")}
-                    className="p-1 px-2.5 bg-blue-500/10 border border-blue-500/30 hover:bg-blue-500/20 text-[10px] text-blue-500 font-bold rounded-full transition cursor-pointer"
+                    onClick={() =>
+                      handleSendMessage(
+                        undefined,
+                        "Explain London Judas Swing manipulation and Asian liquidity sweeps"
+                      )
+                    }
+                    className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
                   >
-                    💶 London Judas Swing (Forex)
+                    London Judas Swing
                   </button>
                   <button
-                    onClick={() => handleSendMessage(undefined, "What is SMT Divergence between EUR/USD and GBP/USD and how does it spot traps?")}
-                    className="p-1 px-2.5 bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-[10px] text-indigo-500 font-bold rounded-full transition cursor-pointer"
+                    onClick={() =>
+                      handleSendMessage(
+                        undefined,
+                        "Explain what a Fair Value Gap (FVG) represents and how to enter on OTE 0.705"
+                      )
+                    }
+                    className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
                   >
-                    ⚡ SMT Divergence Mastery
-                  </button>
-                  <button
-                    onClick={() => handleSendMessage(undefined, "Explain the exact structural difference between BOS and CHoCH")}
-                    className="p-1 px-2.5 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-[10px] text-amber-500 font-bold rounded-full transition cursor-pointer"
-                  >
-                    ❓ BOS vs CHoCH differences
-                  </button>
-                  <button
-                    onClick={() => handleSendMessage(undefined, "Explain what a Fair Value Gap (FVG) represents and how to enter on OTE 0.705")}
-                    className="p-1 px-2.5 bg-slate-100 border border-slate-200 hover:bg-slate-200 text-[10px] text-cyan-600 font-bold rounded-full transition cursor-pointer"
-                  >
-                    📖 FVG &amp; OTE 0.705 Entry
+                    FVG &amp; 0.705 OTE Entry
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Chat Messages flow bubbles */}
-            <div className="space-y-3 pt-4">
+            <div className="space-y-3 pt-2">
               {messages.map((m, idx) => {
                 const isBot = m.sender === "bot";
                 return (
-                  <div 
-                    key={m.id || idx} 
-                    className={`flex flex-col max-w-[85%] ${isBot ? "self-start mr-auto" : "self-end ml-auto"}`}
+                  <div
+                    key={m.id || idx}
+                    className={`flex flex-col max-w-[88%] ${
+                      isBot ? "self-start mr-auto" : "self-end ml-auto"
+                    }`}
                   >
-                    {/* Timestamp / Sender line */}
-                    <span className={`text-[9px] text-slate-500 font-mono mb-1 ${isBot ? "text-left" : "text-right"}`}>
-                      {isBot ? "Copilot Assistant" : firebaseAuth.currentUser?.email === "ibrahimfaruqolamilekan4@gmail.com" ? "Admin (Ibrahim)" : "User"} • {new Date(m.created_at?.toDate?.() || m.created_at || new Date()).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                    <span
+                      className={`text-[10px] text-slate-500 font-mono mb-1 ${
+                        isBot ? "text-left" : "text-right"
+                      }`}
+                    >
+                      {isBot ? "QuantSMC Copilot" : "Trader"} ·{" "}
+                      {new Date(
+                        m.created_at?.toDate?.() || m.created_at || new Date()
+                      ).toLocaleTimeString(undefined, {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
                     </span>
 
-                    <div className={`p-3.5 rounded-2xl text-[12px] leading-relaxed relative ${
-                      isBot 
-                        ? "bg-white border border-slate-200 text-slate-800" 
-                        : "bg-indigo-600 text-slate-900 rounded-br-none glow-indigo-sm"
-                    }`}
+                    <div
+                      className={`p-3.5 rounded-xl text-xs leading-relaxed ${
+                        isBot
+                          ? "bg-white border border-slate-200 text-slate-800"
+                          : "bg-emerald-600 text-white rounded-br-none"
+                      }`}
                       style={{ whiteSpace: "pre-wrap" }}
                     >
                       {m.message}
 
-                      {/* Specialized check for custom canvas rendering */}
-                      {isBot && m.message.includes("🎨") && imageModalUrl && (
+                      {isBot && m.message.includes("Synthesized Educational Diagram") && imageModalUrl && (
                         <div className="mt-2.5">
-                          <div 
+                          <div
                             onClick={() => setImageModalUrl(imageModalUrl)}
-                            className="bg-slate-50 aspect-[8/5] w-full rounded-xl overflow-hidden border border-slate-200 cursor-pointer hover:border-cyan-400/50 transition relative group"
+                            className="bg-[#F8FAF9] aspect-[8/5] w-full rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:border-emerald-600 transition relative"
                           >
-                            <img 
-                              src={imageModalUrl} 
-                              alt="Educational concept visual chart" 
-                              className="w-full h-full object-cover transition group-hover:scale-101"
+                            <img
+                              src={imageModalUrl}
+                              alt="Educational concept visual chart"
+                              className="w-full h-full object-cover"
                             />
-                            <div className="absolute inset-0 bg-slate-50/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-                              <span className="text-[10px] text-slate-900 bg-slate-50/80 p-2 rounded-lg border border-slate-200 font-bold uppercase tracking-widest flex items-center gap-1">
-                                <PlusCircle className="h-3.5 w-3.5" /> Zoom View
-                              </span>
-                            </div>
                           </div>
                         </div>
                       )}
@@ -478,10 +473,10 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
 
               {isSending && (
                 <div className="flex flex-col max-w-[85%] self-start mr-auto">
-                  <span className="text-[9px] text-slate-500 font-mono mb-1">AI Copilot</span>
-                  <div className="bg-white border border-slate-850 p-3.5 rounded-2xl flex items-center gap-2 text-slate-600 text-xs">
-                    <Loader2 className="h-4.5 w-4.5 text-indigo-500 animate-spin" />
-                    Calculating trade matrices...
+                  <span className="text-[10px] text-slate-500 font-mono mb-1">QuantSMC Copilot</span>
+                  <div className="bg-white border border-slate-200 p-3.5 rounded-xl flex items-center gap-2 text-slate-600 text-xs">
+                    <Loader2 className="h-4 w-4 text-emerald-600 animate-spin" />
+                    Evaluating market structure...
                   </div>
                 </div>
               )}
@@ -491,100 +486,95 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
           </div>
         )}
 
-        {/* LEARNING DATABASE MANAGEMENT SCREEN */}
         {activeTab === "learnings" && (
           <div className="space-y-4">
-            
-            {/* Saved learning capturing panel */}
             <div className="bg-white border border-slate-200 p-4 rounded-xl">
-              <h4 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-display mb-1 flex items-center gap-1.5">
-                <PlusCircle className="h-4 w-4 text-emerald-400" />
-                Capture Trading Custom Rule
+              <h4 className="text-xs font-bold text-slate-900 font-display mb-1 flex items-center gap-1.5">
+                <PlusCircle className="h-4 w-4 text-emerald-600" />
+                Save Custom Trading Rule
               </h4>
-              <p className="text-[10px] text-slate-600 mb-3 leading-normal">
-                Instruct your AI to remember specific volatility indexes tendencies (e.g. V75 sweeps wicks, C500 spike ratios) so it integrates them into its on-screen SMC analysis.
+              <p className="text-xs text-slate-600 mb-3 leading-normal">
+                Store asset-specific behaviors so the AI analyzer incorporates them during chart evaluations.
               </p>
 
               <form onSubmit={handleCreateLearning} className="space-y-3">
                 <div>
-                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Related Index Context</label>
-                  <select 
-                    value={learningSymbol} 
+                  <label className="block text-xs text-slate-600 mb-1">Instrument</label>
+                  <select
+                    value={learningSymbol}
                     onChange={(e) => setLearningSymbol(e.target.value)}
-                    className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs p-2 bg-[#F8FAF9] border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-emerald-600"
                   >
+                    <option value="EURUSD">EUR/USD</option>
+                    <option value="BTCUSDT.P">BTCUSDT.P</option>
                     <option value="V75">Volatility 75 Index</option>
-                    <option value="V751S">Volatility 75 (1s)</option>
-                    <option value="V100">Volatility 100 Index</option>
                     <option value="B1000">Boom 1000 Index</option>
-                    <option value="C1000">Crash 1000 Index</option>
-                    <option value="STEP">Step Index</option>
-                    <option value="General">Global General SMC</option>
+                    <option value="C500">Crash 500 Index</option>
+                    <option value="General">Global SMC Rule</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Learning Category</label>
-                  <select 
-                    value={learningCategory} 
+                  <label className="block text-xs text-slate-600 mb-1">Category</label>
+                  <select
+                    value={learningCategory}
                     onChange={(e) => setLearningCategory(e.target.value)}
-                    className="w-full text-xs p-2 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500"
+                    className="w-full text-xs p-2 bg-[#F8FAF9] border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-emerald-600"
                   >
-                    <option value="Wicks/Liquidity">Liq/Wick Sweeps</option>
+                    <option value="Wicks/Liquidity">Liquidity Sweeps</option>
                     <option value="Spikes">Boom/Crash Spikes</option>
                     <option value="Risk">Risk / Position Sizing</option>
-                    <option value="Psychology">Trading Psychology</option>
+                    <option value="Structure">Market Structure</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-[9px] text-slate-600 uppercase font-mono mb-1">Observation / Golden Rule</label>
+                  <label className="block text-xs text-slate-600 mb-1">Rule Description</label>
                   <textarea
                     rows={3}
-                    placeholder="e.g., V75 often performs a premium 61.8% Fibonacci retrace before filling daily imbalances."
+                    placeholder="e.g., Wait for a 15M liquidity sweep and CHoCH inside the 0.705 OTE zone."
                     value={learningText}
                     onChange={(e) => setLearningText(e.target.value)}
                     maxLength={300}
-                    className="w-full text-xs p-2.5 bg-slate-100 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-indigo-500 placeholder-slate-600 block resize-none"
-                  ></textarea>
+                    className="w-full text-xs p-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:border-emerald-600 resize-none"
+                  />
                 </div>
 
                 <button
                   type="submit"
                   disabled={isSavingLearning || !learningText.trim()}
-                  className="w-full text-xs font-bold py-2 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-550 border border-indigo-500 text-slate-900 flex items-center justify-center gap-1.5 cursor-pointer disabled:bg-slate-100 disabled:border-slate-850 disabled:text-slate-500"
+                  className="w-full text-xs font-semibold py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isSavingLearning ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Capturing observation...
+                      <span>Saving Rule...</span>
                     </>
                   ) : (
                     <>
-                      <Lightbulb className="h-4 w-4 text-emerald-400 animate-pulse" />
-                      Sync Rule to AI Brain
+                      <Lightbulb className="h-4 w-4" />
+                      <span>Save Rule to Memory</span>
                     </>
                   )}
                 </button>
               </form>
             </div>
 
-            {/* List logged learnings */}
-            <div className="space-y-3">
-              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider font-display mb-1 flex items-center gap-1">
-                <span>Stored observations ({learnings.length})</span>
+            <div className="space-y-2.5">
+              <h4 className="text-xs font-semibold text-slate-700">
+                Saved Observations ({learnings.length})
               </h4>
 
               {learnings.length === 0 ? (
-                <div className="p-6 text-center border border-dashed border-slate-850 rounded-xl text-slate-500 text-xs font-mono">
-                  Your personalized SMC database is clean. Capture custom habits above!
+                <div className="p-6 text-center border border-dashed border-slate-300 bg-white rounded-xl text-slate-500 text-xs">
+                  No custom rules stored yet.
                 </div>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
                   {learnings.map((l) => (
-                    <div key={l.id} className="p-3 bg-slate-50 border border-slate-850 rounded-xl space-y-1.5">
-                      <div className="flex justify-between items-center text-[9px] font-mono">
-                        <span className="text-indigo-400 font-bold uppercase">{l.category}</span>
+                    <div key={l.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-1">
+                      <div className="flex justify-between items-center text-[11px] font-mono">
+                        <span className="text-emerald-700 font-semibold">{l.category}</span>
                         <span className="text-slate-500">{l.symbol}</span>
                       </div>
                       <p className="text-xs text-slate-700 leading-normal">{l.learnings}</p>
@@ -593,119 +583,97 @@ This diagram was custom built by Gemini modeling engine. Use it to study ideal m
                 </div>
               )}
             </div>
-
           </div>
         )}
-
       </div>
 
-      {/* FOOTER MESSAGE WRAPPING INPUTS BLOCK */}
+      {/* FOOTER MESSAGE INPUT */}
       {activeTab === "chat" && (
-        <div className="p-4 border-t border-slate-200 bg-slate-50/90 space-y-3 sticky bottom-0 left-0 right-0 z-10 select-none">
-          
-          {/* Diagnostic utilities: diagram builder */}
-          <div className="bg-slate-100 border border-slate-850 p-2 rounded-xl flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-1">
-              <Sparkles className="h-3.5 w-3.5 text-cyan-400" />
+        <div className="p-4 border-t border-slate-200 bg-white space-y-3 sticky bottom-0 left-0 right-0 z-10">
+          <div className="bg-[#F8FAF9] border border-slate-200 p-2 rounded-lg flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
               <select
                 value={diagramSubject}
                 onChange={(e) => setDiagramSubject(e.target.value)}
-                className="bg-transparent border-none text-[10px] text-slate-700 font-bold focus:outline-none cursor-pointer max-w-[150px] shrink-0"
+                className="bg-transparent border-none text-xs text-slate-800 font-medium focus:outline-none cursor-pointer truncate"
               >
                 <option value="Bullish Order Block Shift">Bullish OB Shift</option>
-                <option value="Bearish Liquidity Wick sweep">Wick Sweep</option>
-                <option value="Fib retracement golden pocket">Fib Retracement</option>
-                <option value="Boom spike hazard zones">Spike Protection</option>
+                <option value="Bearish Liquidity Wick sweep">Liquidity Sweep</option>
+                <option value="Fib retracement golden pocket">0.705 OTE Retracement</option>
+                <option value="Boom spike hazard zones">Boom/Crash Spike Base</option>
               </select>
             </div>
 
             <button
               onClick={handleGenerateDiagram}
               disabled={isGeneratingDiagram}
-              className={`text-[10px] font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1 shrink-0 ${
-                isGeneratingDiagram 
-                  ? "bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed" 
-                  : "bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/30 text-cyan-400 hover:text-slate-900 transition cursor-pointer"
-              }`}
+              className="text-xs font-semibold px-3 py-1.5 rounded-md bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 transition cursor-pointer shrink-0 flex items-center gap-1"
             >
               {isGeneratingDiagram ? (
                 <>
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Drawing...
+                  <span>Drawing...</span>
                 </>
               ) : (
-                <>
-                  <Sparkles className="h-3 w-3" />
-                  Synthesize Diagram
-                </>
+                <span>Diagram</span>
               )}
             </button>
           </div>
 
-          {/* Form input messaging box */}
           <form onSubmit={(e) => handleSendMessage(e)} className="flex gap-2">
             <input
               type="text"
-              placeholder="e.g. Is this H1 block mitigated?"
+              placeholder="Ask about SMC structure, OTE, or risk..."
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               disabled={isSending}
-              className="flex-1 bg-slate-100 border border-slate-805 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:border-indigo-500"
+              className="flex-1 bg-[#F8FAF9] border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
             />
             <button
               type="submit"
               disabled={!inputText.trim() || isSending}
-              className="p-2.5 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500 text-slate-900 rounded-xl transition cursor-pointer shadow-md shadow-indigo-500/10 select-none flex items-center justify-center min-w-[38px] disabled:opacity-40"
+              className="p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition cursor-pointer flex items-center justify-center min-w-[38px] disabled:opacity-40"
             >
               <Send className="h-4 w-4" />
             </button>
           </form>
 
-          {/* Prompt reset session clear command */}
-          <div className="flex justify-between items-center text-[9px] text-slate-500">
-            <span>SMC Copilot fully context synced</span>
-            <button 
-              onClick={handleClearHistory} 
-              className="hover:text-rose-400 transition cursor-pointer select-none"
+          <div className="flex justify-between items-center text-[11px] text-slate-500">
+            <span>Context synced</span>
+            <button
+              onClick={handleClearHistory}
+              className="hover:text-rose-600 transition cursor-pointer"
             >
-              Reset Session Room
+              Reset Chat
             </button>
           </div>
         </div>
       )}
 
-      {/* DYNAMIC ZOOM DIALOG MODAL */}
       {imageModalUrl && (
-        <div 
-          className="fixed inset-0 z-[100] bg-white/95 backdrop-blur-md flex items-center justify-center p-4 selection:bg-transparent"
+        <div
+          className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setImageModalUrl(null)}
         >
-          <div className="relative max-w-4xl w-full max-h-[85vh] bg-[#0c0f17] border border-slate-200 rounded-3xl overflow-hidden shadow-2xl p-4 flex flex-col items-center">
-            
-            <button 
+          <div className="relative max-w-4xl w-full max-h-[85vh] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl p-6 flex flex-col items-center">
+            <button
               onClick={() => setImageModalUrl(null)}
-              className="absolute top-4 right-4 bg-slate-100 hover:bg-white text-slate-600 hover:text-slate-900 p-2 rounded-xl transition cursor-pointer z-10"
+              className="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition cursor-pointer z-10"
             >
               <X className="h-5 w-5" />
             </button>
 
             <div className="w-full flex-1 overflow-auto flex items-center justify-center">
-              <img 
-                src={imageModalUrl} 
-                alt="Enlarged study schematic model" 
-                className="max-w-full max-h-[70vh] object-contain rounded-2xl border border-slate-200 selection:bg-transparent"
+              <img
+                src={imageModalUrl}
+                alt="SMC Schematic Diagram"
+                className="max-w-full max-h-[70vh] object-contain rounded-xl border border-slate-200"
               />
             </div>
-
-            <div className="pt-4 text-center">
-              <span className="text-xs font-bold text-slate-900 uppercase tracking-wider font-display">SMC Mechanical Diagram</span>
-              <p className="text-[10px] text-slate-600 mt-1">Study mitigation levels, stop-losses, and premium/discount order lines contextually.</p>
-            </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }

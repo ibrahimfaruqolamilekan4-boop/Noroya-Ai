@@ -1,16 +1,12 @@
 import React, { useState } from "react";
-import { 
-  Copy, 
-  Check, 
-  HelpCircle, 
-  Code, 
-  FileCode, 
-  Cpu, 
-  Sparkles, 
-  Flame, 
-  Terminal,
+import {
+  Copy,
+  Check,
+  Code,
+  FileCode,
+  Cpu,
+  Flame,
   Layers,
-  ArrowRight
 } from "lucide-react";
 
 export default function PineScriptGenerator() {
@@ -18,7 +14,7 @@ export default function PineScriptGenerator() {
   const [copied, setCopied] = useState(false);
 
   const confluencePineCode = `//@version=5
-indicator("SMC + CRT + Silver Bullet Confluence [Elite Synthetics]", overlay=true, max_boxes_count=500, max_lines_count=500)
+indicator("SMC + CRT + Silver Bullet Confluence [QuantSMC]", overlay=true, max_boxes_count=500, max_lines_count=500)
 
 // Inputs
 showFib = input.bool(true, "Show Fibonacci Retracement")
@@ -30,7 +26,6 @@ showJudas = input.bool(true, "Show Judas Swing Traps")
 showAMD = input.bool(true, "Show Power of 3 (AMD) Cycles")
 
 // --- CANDLE RANGE THEORY (CRT) ---
-// Define HTF (daily cycle) range boundaries
 var float crtHigh = na
 var float crtLow = na
 var bool crtSwept = false
@@ -40,63 +35,24 @@ if ta.change(time("D")) != 0
     crtLow := low[1]
     crtSwept := false
 
-// Sweep checks
 if showCRT and not na(crtHigh) and not crtSwept
     if high > crtHigh and close < crtHigh
-        label.new(bar_index, high, "🧹 CRT Sweep High (Target Reverse)", color=color.rose, textcolor=color.white, style=label.style_label_down)
+        label.new(bar_index, high, "CRT Sweep High (Reverse)", color=color.red, textcolor=color.white, style=label.style_label_down)
         crtSwept := true
     else if low < crtLow and close > crtLow
-        label.new(bar_index, low, "🧹 CRT Sweep Low (Target Reverse)", color=color.emerald, textcolor=color.white, style=label.style_label_up)
+        label.new(bar_index, low, "CRT Sweep Low (Reverse)", color=color.green, textcolor=color.white, style=label.style_label_up)
         crtSwept := true
 
-// --- JUDAS SWING DETECTOR ---
-if showJudas and not na(crtHigh)
-    // False breakout sweep above Daily high range extreme, closes back inside range (Bearish trap)
-    if high > crtHigh and close < crtHigh and close < open
-        label.new(bar_index, high, "🪤 Bearish Judas Swing (Bull Trap)", color=color.magenta, textcolor=color.white, style=label.style_label_down)
-    // False breakout sweep below Daily low range extreme, closes back inside range (Bullish trap)
-    else if low < crtLow and close > crtLow and close > open
-        label.new(bar_index, low, "🪤 Bullish Judas Swing (Bear Trap)", color=color.magenta, textcolor=color.white, style=label.style_label_up)
-
-// Draw HTF Ranges
-if showCRT and not na(crtHigh)
-    box.new(bar_index[1], crtHigh, bar_index + 12, crtLow, bgcolor=color.new(color.violet, 96), border_color=color.new(color.violet, 80), border_style=line.style_dashed)
-
-// --- POWER OF 3 (AMD) ---
-if showAMD and not na(crtHigh)
-    // Draw Accumulation range overlay as a box (normally spans several candles before Judas/CRT sweeps)
-    box.new(bar_index[10], crtHigh - (crtHigh - crtLow)*0.15, bar_index[2], crtLow + (crtHigh - crtLow)*0.15, bgcolor=color.new(color.cyan, 96), border_color=color.new(color.cyan, 75), border_style=line.style_dashed)
-    
-    // Warn about Manipulation during active session open times when a false hunt sweep is detected
-    if isSBActive or isLondonKZ or isNYAMKZ
-        if (high > crtHigh and close < crtHigh) or (low < crtLow and close > crtLow)
-            label.new(bar_index, high, "🚨 AMD Manipulation Phase Active", color=color.orange, textcolor=color.white, style=label.style_label_down)
-
-// --- SILVER BULLET SESSION BOXES ---
-// London (3-4 AM EST), NY AM (10-11 AM EST), NY PM (2-3 PM EST)
+// --- SILVER BULLET & ICT KILL ZONES ---
 inLondon = (hour == 3)
 inNYAM = (hour == 10)
 inNYPM = (hour == 14)
 isSBActive = inLondon or inNYAM or inNYPM
 
 if showSB and isSBActive
-    box.new(bar_index, high, bar_index + 1, low, bgcolor=color.new(color.yellow, 92), border_color=color.yellow)
+    box.new(bar_index, high, bar_index + 1, low, bgcolor=color.new(color.green, 92), border_color=color.green)
 
-// --- ICT KILL ZONES ---
-// London KZ (2-5 AM EST), NY AM KZ (9:30-12 PM EST), NY PM KZ (3-5 PM EST)
-isLondonKZ = (hour >= 2 and hour < 5)
-isNYAMKZ = (hour >= 9 and hour < 12)
-isNYPMKZ = (hour >= 15 and hour < 17)
-
-if showKZ
-    if isLondonKZ
-        box.new(bar_index, high, bar_index + 1, low, bgcolor=color.new(color.cyan, 95), border_color=color.cyan)
-    else if isNYAMKZ
-        box.new(bar_index, high, bar_index + 1, low, bgcolor=color.new(color.teal, 95), border_color=color.teal)
-    else if isNYPMKZ
-        box.new(bar_index, high, bar_index + 1, low, bgcolor=color.new(color.blue, 95), border_color=color.blue)
-
-// --- FIBONACCI RETRACEMENT ZONE ---
+// --- FIBONACCI OTE 0.618 - 0.786 ZONE ---
 swingHigh = ta.pivothigh(high, 10, 10)
 swingLow = ta.pivotlow(low, 10, 10)
 
@@ -104,107 +60,76 @@ if swingHigh and showFib
     fibHigh = swingHigh
     fibLow = ta.lowest(low, 50)
     fib618 = fibHigh - (fibHigh - fibLow) * 0.618
+    fib705 = fibHigh - (fibHigh - fibLow) * 0.705
     fib786 = fibHigh - (fibHigh - fibLow) * 0.786
-    line.new(bar_index[1], fib618, bar_index + 30, fib618, color=color.yellow, width=1)
-    line.new(bar_index[1], fib786, bar_index + 30, fib786, color=color.orange, width=1)
+    line.new(bar_index[1], fib618, bar_index + 30, fib618, color=color.teal, width=1)
+    line.new(bar_index[1], fib705, bar_index + 30, fib705, color=color.green, width=2)
+    line.new(bar_index[1], fib786, bar_index + 30, fib786, color=color.teal, width=1)
 
 // --- ORDER BLOCKS ---
 if swingLow and showOB
-    box.new(bar_index[1], high[1], bar_index + 35, low[1], bgcolor=color.new(color.green, 92), border_color=color.green)
+    box.new(bar_index[1], high[1], bar_index + 35, low[1], bgcolor=color.new(color.green, 90), border_color=color.green)
 `;
 
-
   const smcPineCode = `//@version=5
-indicator("Elite SMC & Liquidity Void Indicator [Synthetic]", overlay=true, max_boxes_limit=500, max_lines_limit=500)
+indicator("QuantSMC Structural BOS, CHoCH & Order Blocks", overlay=true, max_boxes_limit=500, max_lines_limit=500)
 
-// --- INPUTS ---
 group_smc = "SMC Structure Settings"
 showBOS = input.bool(true, "Show BOS / CHoCH Breaks", group=group_smc)
-showOB = input.bool(true, "Highlight Mitigated/Fresh Order Blocks", group=group_smc)
-obLength = input.int(10, "Order Block Sensitivity", minval=2, group=group_smc)
+showOB = input.bool(true, "Highlight Unmitigated Order Blocks", group=group_smc)
+voidThreshold = input.float(1.5, "Displacement Candle Multiplier", minval=1.0, step=0.1)
 
-group_void = "Liquidity Void / Vacuum Block Settings"
-showVoids = input.bool(true, "Plot Liquidity Voids (Dashed)", group=group_void)
-voidThreshold = input.float(1.5, "Void Candle Displacement Mult", minval=1.0, step=0.1, group=group_void)
+highestHigh = ta.highest(high, 20)
+lowestLow = ta.lowest(low, 20)
 
-// --- STRUCTURAL SCANNING LOGIC ---
-var float highestHigh = na
-var float lowestLow = na
-var int highBar = na
-var int lowBar = na
-
-highestHigh := ta.highest(high, 20)
-lowestLow := ta.lowest(low, 20)
-
-// Detect Break of Structure (BOS)
 bool bullishBOS = ta.crossover(close, ta.valuewhen(highestHigh == high, high, 1))
 bool bearishBOS = ta.crossunder(close, ta.valuewhen(lowestLow == low, low, 1))
 
-plotshape(bullishBOS, title="Bullish BOS", style=shape.triangleup, location=location.belowbar, color=color.cyan, size=size.small, text="BOS")
-plotshape(bearishBOS, title="Bearish BOS", style=shape.triangledown, location=location.abovebar, color=color.rose, size=size.small, text="BOS")
+plotshape(bullishBOS, title="Bullish BOS", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, text="BOS")
+plotshape(bearishBOS, title="Bearish BOS", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, text="BOS")
 
-// --- LIQUIDITY VOIDS / DISPLACEMENT ---
 candleBody = math.abs(close - open)
 avgBody = ta.ema(candleBody, 20)
 isDisplaced = candleBody > (avgBody * voidThreshold)
 
-// Plot high volume imbalances / Liquidity Voids
-if isDisplaced and showVoids
-    line.new(bar_index, high, bar_index + 5, high, color=color.new(color.purple, 30), style=line.style_dashed, width=1)
-    line.new(bar_index, low, bar_index + 5, low, color=color.new(color.purple, 30), style=line.style_dashed, width=1)
-
-// --- ORDER BLOCKS (POI) ---
-// Simple block detection: last down candle before rapid up candle
 isUpBlock = (close[1] < open[1]) and (close > open) and isDisplaced
 isDownBlock = (close[1] > open[1]) and (close < open) and isDisplaced
 
 if isUpBlock and showOB
-    box.new(left=bar_index[1], top=high[1], right=bar_index + 20, bottom=low[1], 
-            bgcolor=color.new(color.teal, 90), border_color=color.teal, border_style=line.style_solid)
+    box.new(left=bar_index[1], top=high[1], right=bar_index + 20, bottom=low[1], bgcolor=color.new(color.green, 88), border_color=color.green)
 
 if isDownBlock and showOB
-    box.new(left=bar_index[1], top=high[1], right=bar_index + 20, bottom=low[1], 
-            bgcolor=color.new(color.rose, 90), border_color=color.rose, border_style=line.style_solid)
+    box.new(left=bar_index[1], top=high[1], right=bar_index + 20, bottom=low[1], bgcolor=color.new(color.red, 88), border_color=color.red)
 `;
 
   const boomCrashPineCode = `//@version=5
-indicator("Boom & Crash Spike Retest Predictor [Synthetic]", overlay=true)
+indicator("Boom & Crash Pre-Spike Base & Retest Predictor [QuantSMC]", overlay=true)
 
-// --- INPUT CONTROL ---
-group_spk = "Spike Analysis Parameters"
-spikeThreshold = input.float(2.0, "Spike Magnitude Ratio (EMA Multiplier)", minval=1.2, step=0.1, group=group_spk)
-shinkZone = input.int(15, "POI Retracement Lookback", minval=5, group=group_spk)
+spikeThreshold = input.float(2.0, "Spike Magnitude Ratio (EMA Multiplier)", minval=1.2, step=0.1)
 
-// --- DETECT ANOMALOUS SPIKES ---
 candleHeight = high - low
 avgHeight = ta.sma(candleHeight, 50)
 isSpike = candleHeight > (avgHeight * spikeThreshold)
 
-// Track spike base zone acting as Vacuum Block magnet
 var float lastSpikeBase = na
 var float lastSpikeTip = na
-var int lastSpikeIdx = na
 
 if isSpike
     lastSpikeBase := close > open ? open : close
     lastSpikeTip := close > open ? close : open
-    lastSpikeIdx := bar_index
 
-// Highlight current POI spike base level
-plot(lastSpikeBase, title="Active Spike Mitigation Zone", color=color.new(color.orange, 40), linewidth=2, style=plot.style_linebr)
+plot(lastSpikeBase, title="Active Spike Mitigation Base", color=color.new(color.green, 20), linewidth=2, style=plot.style_linebr)
 
-// Retest verification: is price returning to spike base within 61.8% discount?
 bool inRetestRange = not na(lastSpikeBase) and (low <= lastSpikeBase + (lastSpikeTip - lastSpikeBase) * 0.25) and (close >= lastSpikeBase)
 
-plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confluence", 
-          style=shape.arrowup, location=location.belowbar, color=color.emerald, size=size.medium, text="RETEST BUY")
+plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confluence", style=shape.arrowup, location=location.belowbar, color=color.green, size=size.normal, text="OTE SPIKE BASE")
 `;
 
-  const activeScriptCode = 
-    activePineScript === "smc_core" 
-      ? smcPineCode 
-      : activePineScript === "boom_crash" 
-      ? boomCrashPineCode 
+  const activeScriptCode =
+    activePineScript === "smc_core"
+      ? smcPineCode
+      : activePineScript === "boom_crash"
+      ? boomCrashPineCode
       : confluencePineCode;
 
   const handleCopy = () => {
@@ -214,144 +139,162 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="pine-script-workstation-panel">
-      {/* Light design bar */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-600 via-indigo-500 to-cyan-500"></div>
-
+    <div className="bg-white border border-slate-200 rounded-xl p-6" id="pine-script-workstation-panel">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-5">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] bg-indigo-950/40 border border-indigo-500/25 text-indigo-400 font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider">
-              TradingView Indicator Integration
-            </span>
+          <div className="text-xs font-mono text-emerald-700">
+            TradingView Pine Script v5 Integration
           </div>
-          <h3 className="text-md font-bold font-display text-slate-900 mt-1 flex items-center gap-2">
-            <Code className="h-4 w-4 text-indigo-400" />
-            SMC Pine Script Indicator Generator
+          <h3 className="text-lg font-bold font-display text-slate-900 mt-0.5 flex items-center gap-2">
+            <Code className="h-4 w-4 text-emerald-600" />
+            SMC &amp; OTE Indicator Script Generator
           </h3>
         </div>
 
         <button
           onClick={handleCopy}
           type="button"
-          className={`px-3 py-1.5 text-xs font-bold rounded-lg uppercase tracking-wide cursor-pointer transition-all duration-300 flex items-center gap-1.5 ${
-            copied 
-              ? "bg-emerald-600 border border-emerald-500 text-slate-900" 
-              : "bg-white hover:bg-slate-200 border border-slate-300 text-indigo-200"
+          className={`px-4 py-2 text-xs font-semibold rounded-lg cursor-pointer transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            copied
+              ? "bg-emerald-700 text-white"
+              : "bg-emerald-600 hover:bg-emerald-700 text-white"
           }`}
         >
           {copied ? (
             <>
               <Check className="h-3.5 w-3.5" />
-              <span>COPIED CODE</span>
+              <span>Copied to Clipboard</span>
             </>
           ) : (
             <>
               <Copy className="h-3.5 w-3.5" />
-              <span>COPY TO CLIPBOARD</span>
+              <span>Copy Pine Script</span>
             </>
           )}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
         {/* Toggle options & Instruction */}
         <div className="md:col-span-1 space-y-4">
-          <div className="space-y-1">
-            <span className="text-[10px] text-slate-500 font-mono font-bold block uppercase">Select Script Edition</span>
+          <div className="space-y-2">
+            <span className="text-xs font-semibold text-slate-700 block">
+              Select Script Edition
+            </span>
             <div className="flex flex-col gap-2">
               <button
-                onClick={() => { setActivePineScript("smc_core"); setCopied(false); }}
+                onClick={() => {
+                  setActivePineScript("smc_core");
+                  setCopied(false);
+                }}
                 type="button"
-                className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
+                className={`py-3 px-4 rounded-lg text-left border transition-colors cursor-pointer flex items-start gap-3 ${
                   activePineScript === "smc_core"
-                    ? "bg-indigo-950/25 border-indigo-500/40 text-slate-900 shadow-indigo-900/10 shadow-lg"
-                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
+                    ? "bg-emerald-50 border-emerald-600 text-slate-900"
+                    : "bg-[#F8FAF9] border-slate-200 text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Cpu className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "smc_core" ? "text-indigo-400" : "text-slate-500"}`} />
+                <Cpu
+                  className={`h-4 w-4 mt-0.5 shrink-0 ${
+                    activePineScript === "smc_core" ? "text-emerald-600" : "text-slate-500"
+                  }`}
+                />
                 <div>
-                  <h4 className="text-xs font-bold font-sans">Premium SMC Core</h4>
-                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Detects primary structural breaks, Order Blocks, and Liquidity voids across indices.</p>
+                  <h4 className="text-xs font-bold text-slate-900">Institutional SMC Core</h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                    Plots structural BOS/CHoCH breaks, Order Blocks, and displacement zones.
+                  </p>
                 </div>
               </button>
 
               <button
-                onClick={() => { setActivePineScript("boom_crash"); setCopied(false); }}
+                onClick={() => {
+                  setActivePineScript("boom_crash");
+                  setCopied(false);
+                }}
                 type="button"
-                className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
+                className={`py-3 px-4 rounded-lg text-left border transition-colors cursor-pointer flex items-start gap-3 ${
                   activePineScript === "boom_crash"
-                    ? "bg-pink-950/25 border-pink-500/40 text-slate-900 shadow-pink-900/10 shadow-lg"
-                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
+                    ? "bg-emerald-50 border-emerald-600 text-slate-900"
+                    : "bg-[#F8FAF9] border-slate-200 text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Flame className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "boom_crash" ? "text-pink-400" : "text-slate-500"}`} />
+                <Flame
+                  className={`h-4 w-4 mt-0.5 shrink-0 ${
+                    activePineScript === "boom_crash" ? "text-emerald-600" : "text-slate-500"
+                  }`}
+                />
                 <div>
-                  <h4 className="text-xs font-bold font-sans">Boom & Crash Predictor</h4>
-                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Designed specifically to map sudden spike origins (Vacuum blocks) and calculate retest triggers.</p>
+                  <h4 className="text-xs font-bold text-slate-900">Boom &amp; Crash Spike Base</h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                    Maps algorithmic tick-spike origins and pre-spike consolidation retests.
+                  </p>
                 </div>
               </button>
 
               <button
-                onClick={() => { setActivePineScript("fib_smc"); setCopied(false); }}
+                onClick={() => {
+                  setActivePineScript("fib_smc");
+                  setCopied(false);
+                }}
                 type="button"
-                className={`py-3 px-4 rounded-xl text-left border transition-all cursor-pointer flex items-start gap-3 ${
+                className={`py-3 px-4 rounded-lg text-left border transition-colors cursor-pointer flex items-start gap-3 ${
                   activePineScript === "fib_smc"
-                    ? "bg-emerald-950/25 border-emerald-500/40 text-slate-900 shadow-emerald-900/10 shadow-lg"
-                    : "bg-slate-100/40 border-slate-200 text-slate-600 hover:text-slate-800"
+                    ? "bg-emerald-50 border-emerald-600 text-slate-900"
+                    : "bg-[#F8FAF9] border-slate-200 text-slate-600 hover:text-slate-900"
                 }`}
               >
-                <Layers className={`h-4 w-4 mt-0.5 shrink-0 ${activePineScript === "fib_smc" ? "text-emerald-400" : "text-slate-500"}`} />
+                <Layers
+                  className={`h-4 w-4 mt-0.5 shrink-0 ${
+                    activePineScript === "fib_smc" ? "text-emerald-600" : "text-slate-500"
+                  }`}
+                />
                 <div>
-                  <h4 className="text-xs font-bold font-sans">SMC + CRT + Silver Bullet</h4>
-                  <p className="text-[10px] text-slate-600 leading-relaxed mt-0.5">Integrates HTF Candle Range Theory sweeps, Silver Bullet hourly gaps, Fib Levels, and Order Blocks in a master confluence script.</p>
+                  <h4 className="text-xs font-bold text-slate-900">SMC + 0.705 OTE + Killzones</h4>
+                  <p className="text-[11px] text-slate-600 leading-relaxed mt-0.5">
+                    Integrates Daily CRT sweeps, ICT Silver Bullet windows, and 0.618–0.786 OTE Fib levels.
+                  </p>
                 </div>
               </button>
-
             </div>
           </div>
 
           {/* Quick instructions block */}
-          <div className="p-4 bg-slate-50 border border-slate-850 rounded-xl space-y-2 text-xs text-slate-600 font-sans shadow-inner">
-            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-widest block font-mono flex items-center gap-1">
-              <FileCode className="h-3 w-3" /> TradingView Import Guide
+          <div className="p-4 bg-[#F8FAF9] border border-slate-200 rounded-lg space-y-2 text-xs text-slate-600">
+            <span className="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+              <FileCode className="h-3.5 w-3.5 text-emerald-600" />
+              TradingView Setup Guide
             </span>
-            <ol className="space-y-2 list-decimal list-inside text-[11px] leading-relaxed">
-              <li>Click <strong className="text-slate-900">Copy To Clipboard</strong> above.</li>
-              <li>Open any synthetic pair on <strong className="text-slate-900">TradingView</strong>.</li>
-              <li>At the bottom panel, open the <strong className="text-indigo-400 font-mono">Pine Editor</strong> tab.</li>
-              <li>Select all default template code and overwrite by pasting this script.</li>
-              <li>Click <strong className="text-emerald-400">Save</strong>, then click <strong className="text-emerald-400">Add to chart</strong> to overlay SMC live zones.</li>
+            <ol className="space-y-1.5 list-decimal list-inside text-[11px] leading-relaxed">
+              <li>Click <strong className="text-slate-900">Copy Pine Script</strong> above.</li>
+              <li>Open your target chart on <strong className="text-slate-900">TradingView</strong>.</li>
+              <li>Open the <strong className="text-emerald-700 font-mono">Pine Editor</strong> tab at the bottom.</li>
+              <li>Paste the script and click <strong className="text-emerald-700">Add to chart</strong>.</li>
             </ol>
           </div>
         </div>
 
         {/* Code View Console */}
         <div className="md:col-span-2 space-y-2">
-          <div className="flex items-center justify-between text-[10px] font-mono font-bold text-slate-500 px-1">
-            <span>PINE SCRIPT GENERATOR ENGINE V5.0</span>
-            <span className="text-cyan-400 animate-pulse">● EDITOR SECURE</span>
+          <div className="flex items-center justify-between text-xs font-mono text-slate-500 px-1">
+            <span>Pine Script v5 Source</span>
+            <span className="text-emerald-700 font-semibold">Ready to Compile</span>
           </div>
-          
-          <div className="relative bg-[#020617] border border-slate-200 rounded-xl overflow-hidden shadow-2xl">
-            {/* Top terminal visual layout bar */}
-            <div className="flex items-center justify-between bg-slate-50 border-b border-slate-200 px-4 py-2.5">
-              <div className="flex gap-2">
-                <span className="h-2 w-2 rounded-full bg-rose-500"></span>
-                <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
-              </div>
-              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">
-                {activePineScript === "smc_core" 
-                  ? "smc_core_synthetic.v5.pine" 
-                  : activePineScript === "boom_crash" 
-                  ? "boom_crash_retest.v5.pine" 
-                  : "synthetic_fib_smc_confluence.v5.pine"}
+
+          <div className="bg-[#0F172A] border border-slate-800 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between bg-slate-900 border-b border-slate-800 px-4 py-2.5">
+              <span className="text-xs font-mono text-emerald-400">
+                {activePineScript === "smc_core"
+                  ? "smc_core_institutional.v5.pine"
+                  : activePineScript === "boom_crash"
+                  ? "boom_crash_spike_base.v5.pine"
+                  : "quantsmc_ote_killzone_confluence.v5.pine"}
               </span>
+              <span className="text-[11px] font-mono text-slate-400">UTF-8</span>
             </div>
 
-            <pre className="p-4 overflow-x-auto text-[10.5px] font-mono text-slate-700 leading-relaxed max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 bg-[#020617]">
+            <pre className="p-4 overflow-x-auto text-xs font-mono text-slate-100 leading-relaxed max-h-[340px] overflow-y-auto">
               <code>{activeScriptCode}</code>
             </pre>
           </div>

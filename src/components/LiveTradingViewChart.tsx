@@ -1158,55 +1158,55 @@ export default function LiveTradingViewChart({
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xl relative overflow-hidden" id="live-tradingview-terminal-container">
-      {/* Dynamic light accent */}
-      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500 via-indigo-600 to-emerald-500"></div>
-
+    <div className="bg-white border border-slate-200 rounded-xl p-5 relative overflow-hidden" id="live-tradingview-terminal-container">
       {/* Title & Connection Status */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${
-              isRealDerivFeed
-                ? derivConnStatus === "AUTHORIZED" || derivConnStatus === "CONNECTED"
-                  ? "bg-emerald-950/45 border-emerald-500/25 text-emerald-400"
-                  : "bg-amber-950/45 border-amber-500/25 text-amber-400"
-                : "bg-cyan-950/45 border-cyan-500/25 text-cyan-400"
-            }`}>
-              {isRealDerivFeed 
-                ? `DERIV LIVE FEED: ${derivConnStatus}` 
-                : "REAL-TIME SIMULATION ENGINE"}
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-600">
+            <span
+              className={`font-semibold ${
+                isRealDerivFeed
+                  ? derivConnStatus === "AUTHORIZED" || derivConnStatus === "CONNECTED"
+                    ? "text-emerald-700"
+                    : "text-amber-700"
+                  : "text-emerald-700"
+              }`}
+            >
+              {isRealDerivFeed
+                ? `Deriv WebSocket: ${derivConnStatus}`
+                : "Algorithmic Simulation Feed"}
             </span>
             {isRealDerivFeed && derivAccountEmail && (
-              <span className="text-[10px] bg-slate-100 border border-slate-200 text-slate-700 font-mono px-2 py-0.5 rounded">
-                Account: {derivAccountEmail}
-              </span>
+              <>
+                <span>·</span>
+                <span className="text-slate-600">Account: {derivAccountEmail}</span>
+              </>
             )}
           </div>
-          <h3 className="text-md font-bold font-display text-slate-900 mt-1 flex items-center gap-2">
-            <Activity className="h-4 w-4 text-cyan-400 animate-pulse" />
-            Live {symbol.name} terminal
+          <h3 className="text-base font-bold font-display text-slate-900 mt-0.5 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-emerald-600" />
+            Live {symbol.name} Terminal
           </h3>
           {derivError && isRealDerivFeed && (
-            <p className="text-[10px] text-red-400 font-mono mt-1">
-              Error: {derivError} (Falling back to local data stream)
+            <p className="text-xs text-rose-600 font-mono mt-1">
+              Notice: {derivError} (Using local simulation stream)
             </p>
           )}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {/* Feed Mode Toggle */}
-          <div className="flex bg-slate-50 border border-slate-200 rounded-lg p-0.5 font-mono text-[9px] font-bold uppercase">
+          <div className="flex bg-[#F1F5F3] border border-slate-200 rounded-lg p-1 text-xs font-medium">
             <button
               onClick={() => {
                 setIsRealDerivFeed(true);
                 setDerivError(null);
               }}
               type="button"
-              className={`px-2 py-1 rounded transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 isRealDerivFeed
-                  ? "bg-cyan-600 text-slate-900 shadow font-extrabold"
-                  : "text-slate-600 hover:text-slate-800"
+                  ? "bg-white text-slate-900 shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Deriv Live
@@ -1217,10 +1217,10 @@ export default function LiveTradingViewChart({
                 setDerivError(null);
               }}
               type="button"
-              className={`px-2 py-1 rounded transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                 !isRealDerivFeed
-                  ? "bg-indigo-600 text-slate-900 shadow font-extrabold"
-                  : "text-slate-600 hover:text-slate-800"
+                  ? "bg-white text-slate-900 shadow-xs font-semibold"
+                  : "text-slate-600 hover:text-slate-900"
               }`}
             >
               Simulation
@@ -1230,112 +1230,117 @@ export default function LiveTradingViewChart({
           <button
             onClick={() => setIsLiveEnabled(!isLiveEnabled)}
             type="button"
-            className={`px-3 py-1 text-[10px] font-mono font-bold rounded-lg uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
-              isLiveEnabled 
-                ? "bg-emerald-950/50 border border-emerald-700/60 text-emerald-400 shadow-md shadow-emerald-900/10"
-                : "bg-slate-100 border border-slate-200 text-slate-600"
+            className={`px-3 py-1.5 text-xs font-mono font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer border ${
+              isLiveEnabled
+                ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+                : "bg-[#F8FAF9] border-slate-200 text-slate-600"
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${isLiveEnabled ? "bg-emerald-400 animate-ping" : "bg-slate-500"}`} />
-            {isLiveEnabled ? "STREAMING LIVE" : "PAUSED"}
+            <span
+              className={`h-2 w-2 rounded-full ${
+                isLiveEnabled ? "bg-emerald-600 animate-pulse" : "bg-slate-400"
+              }`}
+            />
+            {isLiveEnabled ? "Streaming" : "Paused"}
           </button>
 
-          <span className="text-[11px] font-mono font-black text-slate-700">
-            Bid: <span className="text-cyan-400">{lastTickPrice?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "..."}</span>
+          <span className="text-xs font-mono font-bold text-slate-900 tabular-nums">
+            Spot:{" "}
+            <span className="text-emerald-700">
+              {lastTickPrice?.toLocaleString(undefined, { minimumFractionDigits: 2 }) || "..."}
+            </span>
           </span>
         </div>
       </div>
 
       {/* Visual Workspace Controls bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-slate-50 border border-slate-200/80 rounded-xl p-3 mb-4">
-        
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3 bg-[#F8FAF9] border border-slate-200 rounded-xl p-3 mb-4">
         {/* Toggle zones */}
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowAiZones(!showAiZones)}
             type="button"
-            className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
-              showAiZones 
-                ? "bg-indigo-950/40 border-indigo-500/30 text-indigo-300 font-extrabold"
-                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
+            className={`flex items-center gap-1.5 text-xs font-semibold py-1.5 px-2.5 rounded-lg border transition-colors cursor-pointer ${
+              showAiZones
+                ? "bg-emerald-50 border-emerald-600 text-emerald-800"
+                : "bg-white border-slate-200 text-slate-600"
             }`}
           >
-            {showAiZones ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            AI SMC
+            {showAiZones ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            SMC Zones
           </button>
 
           <button
             onClick={() => setShowFibLines(!showFibLines)}
             type="button"
-            className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
-              showFibLines 
-                ? "bg-amber-950/40 border-amber-500/30 text-amber-300 font-extrabold"
-                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
+            className={`flex items-center gap-1.5 text-xs font-semibold py-1.5 px-2.5 rounded-lg border transition-colors cursor-pointer ${
+              showFibLines
+                ? "bg-emerald-50 border-emerald-600 text-emerald-800"
+                : "bg-white border-slate-200 text-slate-600"
             }`}
           >
-            {showFibLines ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            Fib lines
+            {showFibLines ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            Fib OTE
           </button>
 
           <button
             onClick={() => setShowRsi(!showRsi)}
             type="button"
-            className={`flex items-center gap-1.5 text-[10px] font-bold font-mono uppercase tracking-wider py-1.5 px-2 rounded-lg border transition-all cursor-pointer ${
-              showRsi 
-                ? "bg-purple-950/40 border-purple-500/30 text-purple-300 font-extrabold"
-                : "bg-slate-100/60 border-slate-200 text-slate-500 font-normal"
+            className={`flex items-center gap-1.5 text-xs font-semibold py-1.5 px-2.5 rounded-lg border transition-colors cursor-pointer ${
+              showRsi
+                ? "bg-emerald-50 border-emerald-600 text-emerald-800"
+                : "bg-white border-slate-200 text-slate-600"
             }`}
           >
-            {showRsi ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-            RSI Divergence
+            {showRsi ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            RSI (14)
           </button>
         </div>
 
         {/* Sync Trigger / Save to Workspace */}
-        <div className="md:col-span-3 flex flex-wrap items-center justify-end gap-3 font-sans">
-          <span className="text-[10px] font-medium text-slate-600 font-mono">
-            LIVE R:R MULTIPLIER: <span className="text-emerald-400 font-bold">{liveRRRatio}</span>
+        <div className="md:col-span-3 flex flex-wrap items-center justify-end gap-3">
+          <span className="text-xs font-medium text-slate-600 font-mono tabular-nums">
+            Live R:R: <span className="text-emerald-700 font-bold">{liveRRRatio}</span>
           </span>
 
-          {/* Spike simulator for boom/crash */}
           <button
             onClick={handleForceMacroTrend}
             type="button"
-            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-[10px] font-bold uppercase tracking-wider font-mono rounded-lg border border-slate-300 hover:text-slate-900 transition-all flex items-center gap-1 cursor-pointer"
+            className="px-3 py-1.5 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-800 rounded-lg border border-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer"
           >
-            <Zap className="h-3 w-3 text-cyan-400" />
-            {isBoom ? "Trigger Spike!" : isCrash ? "Trigger Crash!" : "Trigger Volatility!"}
+            <Zap className="h-3.5 w-3.5 text-emerald-600" />
+            {isBoom ? "Simulate Spike" : isCrash ? "Simulate Drop" : "Simulate Impulse"}
           </button>
 
           {onCaptureScreenshot && (
             <button
               onClick={handleCaptureScreenshot}
               type="button"
-              className="px-3 py-1.5 bg-amber-600/90 hover:bg-amber-500 text-[10.5px] font-bold uppercase tracking-wider text-slate-900 rounded-lg border border-amber-500/50 transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-amber-900/30"
+              className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-xs font-semibold text-emerald-800 rounded-lg border border-emerald-600 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
-              <Eye className="h-3.5 w-3.5" />
-              Capture & Analyze
+              <Eye className="h-3.5 w-3.5 text-emerald-600" />
+              Capture &amp; Scan
             </button>
           )}
 
           <button
             onClick={handleLevelSyncClick}
             type="button"
-            className={`px-3 py-1.5 rounded-lg font-bold text-[10.5px] uppercase tracking-wide transition-all duration-350 flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1.5 cursor-pointer ${
               syncStatus
-                ? "bg-emerald-600 border border-emerald-500 text-slate-900"
-                : "bg-gradient-to-r from-cyan-600 to-indigo-650 hover:from-cyan-500 hover:to-indigo-550 border border-cyan-500/30 text-cyan-100 shadow-md shadow-cyan-200/40 hover:scale-[1.02]"
+                ? "bg-emerald-700 text-white"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
             }`}
           >
             {syncStatus ? (
               <>
                 <Check className="h-3.5 w-3.5" />
-                <span>Synced Successfully</span>
+                <span>Synced</span>
               </>
             ) : (
               <>
-                <Sliders className="h-3 w-3" />
-                <span>Sync to Workspace Settings</span>
+                <Sliders className="h-3.5 w-3.5" />
+                <span>Sync Levels</span>
               </>
             )}
           </button>
@@ -1343,96 +1348,91 @@ export default function LiveTradingViewChart({
       </div>
 
       {/* Main Lightweight chart mounting point */}
-      <div className="relative bg-white border border-slate-200/60 rounded-xl overflow-hidden flex flex-col min-h-[420px]" id="tradingview-dual-pane-system">
+      <div className="relative bg-white border border-slate-200 rounded-xl overflow-hidden flex flex-col min-h-[420px]" id="tradingview-dual-pane-system">
         {isRealDerivFeed && isDerivLoading && (
-          <div className="absolute inset-0 bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center z-30 transition-all">
-            <RefreshCw className="h-8 w-8 text-cyan-400 animate-spin mb-3" />
-            <span className="text-xs font-mono text-cyan-350 font-bold tracking-widest uppercase">
-              Connecting Deriv Secure Server
+          <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex flex-col items-center justify-center z-30">
+            <RefreshCw className="h-7 w-7 text-emerald-600 animate-spin mb-2.5" />
+            <span className="text-xs font-semibold text-slate-900">
+              Connecting to Deriv Market Stream...
             </span>
-            <span className="text-[10px] text-slate-600 mt-2 font-mono">
-              Fetching live {symbol.name} algorithm ticks...
+            <span className="text-xs text-slate-500 mt-1 font-mono">
+              Subscribing to {symbol.name} ticks
             </span>
           </div>
         )}
         <div ref={chartContainerRef} className="w-full flex-1 min-h-[300px]" />
-        
+
         {/* RSI Divergence Indicator Sub-Pane */}
         {showRsi && (
-          <div className="w-full h-[155px] border-t border-slate-850/80 bg-slate-50 relative overflow-hidden shrink-0" id="rsi-indicator-docking-pane">
+          <div className="w-full h-[155px] border-t border-slate-200 bg-[#F8FAF9] relative overflow-hidden shrink-0" id="rsi-indicator-docking-pane">
             <div ref={rsiContainerRef} className="w-full h-full" />
-            <div className="absolute top-2 left-4 text-[9px] font-mono tracking-wider text-purple-400 font-bold uppercase pointer-events-none z-20 flex items-center gap-1.5 select-none">
-              <span className="h-1.5 w-1.5 bg-yellow-500 rounded-full animate-pulse"></span>
-              <span>Relative Strength Index (RSI 14) Divergence Panel</span>
-              <span className="text-[7.5px] px-1 bg-purple-950/40 border border-purple-500/20 text-purple-300 rounded font-normal leading-none py-0.5">OS: 30 | OB: 70</span>
+            <div className="absolute top-2 left-4 text-[11px] font-mono text-slate-700 font-semibold pointer-events-none z-20 flex items-center gap-2 select-none">
+              <span>RSI (14) Momentum &amp; Divergence</span>
+              <span className="text-slate-500">· OS: 30 / OB: 70</span>
             </div>
           </div>
         )}
-        
-        {/* Labeled overlay background */}
-        <span className="absolute bottom-4 left-4 text-[9px] font-mono tracking-widest text-slate-650 pointer-events-none uppercase z-20 select-none">
-          LIGHTWEIGHT CHARTS BY TRADINGVIEW • SYNTHETIC ALGORITHM FEED
-        </span>
       </div>
 
-      {/* RSI Divergence HUD (Heads-Up Display) Panel */}
-      <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-4 mt-4 text-xs font-sans">
+      {/* RSI Divergence HUD Panel */}
+      <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-4 mt-4 text-xs">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <Activity className="h-3.5 w-3.5 text-purple-400" />
-            <span className="font-bold text-slate-800">RSI Divergence HUD Scanner</span>
+            <Activity className="h-4 w-4 text-emerald-600" />
+            <span className="font-bold text-slate-900">RSI Divergence Scanner</span>
           </div>
-          <div className="text-[9px] uppercase font-mono px-2 py-0.5 rounded bg-purple-950/40 border border-purple-500/20 text-purple-300 font-semibold">
-            Active 14 Period Scanner
-          </div>
+          <span className="text-xs font-mono text-emerald-700 font-semibold">
+            14-Period Pivot Compare
+          </span>
         </div>
-        
+
         {divergences.length === 0 ? (
-          <p className="text-slate-500 italic text-[11px] leading-relaxed">
-            Scanning active ticking stream for mechanical divergences... Price action structure is in harmony with momentum.
+          <p className="text-slate-600 text-xs leading-relaxed">
+            Monitoring tick stream for structural price-momentum divergences. Price action is currently aligned with RSI momentum.
           </p>
         ) : (
           <div className="space-y-2 mt-2 max-h-[160px] overflow-y-auto pr-1">
-            {divergences.slice(-2).reverse().map((div, i) => (
-              <div 
-                key={i} 
-                className={`p-2.5 rounded-lg border flex items-start gap-2.5 ${
-                  div.type === "BULLISH"
-                    ? "bg-emerald-950/15 border-emerald-500/20 text-emerald-400"
-                    : "bg-rose-950/15 border-rose-500/20 text-rose-400"
-                }`}
-              >
-                {div.type === "BULLISH" ? (
-                  <TrendingUp className="h-4 w-4 shrink-0 mt-0.5" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 shrink-0 mt-0.5" />
-                )}
-                <div className="flex-1">
-                  <p className="font-black text-[11px] uppercase tracking-wider">
-                    {div.type === "BULLISH" ? "Bullish RSI Divergence Confirmed" : "Bearish RSI Divergence Confirmed"}
-                  </p>
-                  <p className="text-[10px] text-slate-350 leading-relaxed mt-1">
-                    {div.type === "BULLISH" 
-                      ? `Price established lower lows (${div.valPrice2.toFixed(2)} vs ${div.valPrice1.toFixed(2)}), but RSI printed a higher low (${div.valRsi2.toFixed(1)} vs ${div.valRsi1.toFixed(1)}) at candle time. This indicates a mechanical exhaustion of bearish sellers near SMC zones.`
-                      : `Price established higher highs (${div.valPrice2.toFixed(2)} vs ${div.valPrice1.toFixed(2)}), but RSI printed a lower high (${div.valRsi2.toFixed(1)} vs ${div.valRsi1.toFixed(1)}) at candle time. This indicates a mechanical depletion of active buyers.`
-                    }
-                  </p>
-                  <div className="flex items-center gap-3 mt-1.5 text-[9px] font-mono text-slate-450 uppercase">
-                    <span className="font-semibold text-slate-700">CONFLUENCE: SMC {div.type === "BULLISH" ? "DEMAND OB" : "SUPPLY OB"} REVERSAL ALIGNMENT</span>
+            {divergences
+              .slice(-2)
+              .reverse()
+              .map((div, i) => (
+                <div
+                  key={i}
+                  className={`p-3 rounded-lg border flex items-start gap-2.5 ${
+                    div.type === "BULLISH"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : "bg-rose-50 border-rose-200 text-rose-900"
+                  }`}
+                >
+                  {div.type === "BULLISH" ? (
+                    <TrendingUp className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-bold text-xs">
+                      {div.type === "BULLISH"
+                        ? "Bullish RSI Divergence Confirmed"
+                        : "Bearish RSI Divergence Confirmed"}
+                    </p>
+                    <p className="text-xs text-slate-700 leading-relaxed mt-0.5">
+                      {div.type === "BULLISH"
+                        ? `Price printed lower lows (${div.valPrice2.toFixed(2)} vs ${div.valPrice1.toFixed(2)}) while RSI formed a higher low (${div.valRsi2.toFixed(1)} vs ${div.valRsi1.toFixed(1)}), signaling seller exhaustion.`
+                        : `Price printed higher highs (${div.valPrice2.toFixed(2)} vs ${div.valPrice1.toFixed(2)}) while RSI formed a lower high (${div.valRsi2.toFixed(1)} vs ${div.valRsi1.toFixed(1)}), signaling buyer exhaustion.`}
+                    </p>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
 
       {/* Interactive Sliders for adjusting levels right beside the chart */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4 font-mono bg-slate-100/40 border border-slate-850 p-4 rounded-xl">
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-cyan-400 flex justify-between uppercase">
-            <span>Entry Level</span>
-            <span>{tempEntry.toFixed(2)}</span>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mt-4 font-mono bg-[#F8FAF9] border border-slate-200 p-4 rounded-xl tabular-nums">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-800 flex justify-between">
+            <span>Entry</span>
+            <span className="text-emerald-700">{tempEntry.toFixed(2)}</span>
           </label>
           <input
             type="range"
@@ -1441,14 +1441,14 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempEntry}
             onChange={(e) => setTempEntry(parseFloat(e.target.value))}
-            className="w-full accent-cyan-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-rose-400 flex justify-between uppercase">
-            <span>Stop Loss (SL)</span>
-            <span>{tempSL.toFixed(2)}</span>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-800 flex justify-between">
+            <span>Stop Loss</span>
+            <span className="text-rose-600">{tempSL.toFixed(2)}</span>
           </label>
           <input
             type="range"
@@ -1457,14 +1457,14 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempSL}
             onChange={(e) => setTempSL(parseFloat(e.target.value))}
-            className="w-full accent-rose-500 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-rose-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-emerald-400 flex justify-between uppercase">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-800 flex justify-between">
             <span>Take Profit 1</span>
-            <span>{tempTP1.toFixed(2)}</span>
+            <span className="text-emerald-700">{tempTP1.toFixed(2)}</span>
           </label>
           <input
             type="range"
@@ -1473,14 +1473,14 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempTP1}
             onChange={(e) => setTempTP1(parseFloat(e.target.value))}
-            className="w-full accent-emerald-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
-        <div className="space-y-1">
-          <label className="text-[9px] font-bold text-teal-400 flex justify-between uppercase">
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-800 flex justify-between">
             <span>Take Profit 2</span>
-            <span>{tempTP2.toFixed(2)}</span>
+            <span className="text-emerald-700">{tempTP2.toFixed(2)}</span>
           </label>
           <input
             type="range"
@@ -1489,7 +1489,7 @@ export default function LiveTradingViewChart({
             step={symbol.lotStepValue || 0.1}
             value={tempTP2}
             onChange={(e) => setTempTP2(parseFloat(e.target.value))}
-            className="w-full accent-teal-400 h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+            className="w-full accent-emerald-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
       </div>

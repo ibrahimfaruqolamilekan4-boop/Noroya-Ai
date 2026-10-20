@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { SYNTHETIC_SYMBOLS, SyntheticSymbol } from "../data/symbols";
-import { ShieldAlert, DollarSign, HelpCircle, RefreshCcw } from "lucide-react";
+import { ShieldAlert, HelpCircle } from "lucide-react";
 
 interface RiskCalculatorProps {
   initialBalance?: number;
@@ -27,7 +27,6 @@ export default function RiskCalculator({
   const [customMinLot, setCustomMinLot] = useState(0.01);
   const [customPointValue, setCustomPointValue] = useState(1.0);
 
-  // Sync selected symbol from outer dashboard changes (e.g. from uploaded chart predictions)
   useEffect(() => {
     if (selectedSymbolTicker) {
       const match = SYNTHETIC_SYMBOLS.find((s) => s.ticker === selectedSymbolTicker);
@@ -38,7 +37,6 @@ export default function RiskCalculator({
     }
   }, [selectedSymbolTicker]);
 
-  // Sync stop loss points from prediction
   useEffect(() => {
     if (initialStopLossPoints) {
       setStopLossPoints(initialStopLossPoints);
@@ -51,26 +49,26 @@ export default function RiskCalculator({
     }
   }, [balance, onBalanceChange]);
 
-  // Risk Calculations
-  const dollarRisk = (balance * (riskPercent / 100));
-  
+  const dollarRisk = balance * (riskPercent / 100);
   const lotSizeMultiplier = customSymbol ? customPointValue : selectedSymbol.lotStepValue;
   const rawLotSize = dollarRisk / (stopLossPoints * lotSizeMultiplier);
-  
   const minRequiredLot = customSymbol ? customMinLot : selectedSymbol.minLotSize;
   const finalLotSize = Math.max(minRequiredLot, rawLotSize);
   const isLotSizeBelowMinimum = rawLotSize < minRequiredLot;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl p-6 glow-cyan" id="risk-calculator">
-      <div className="flex justify-between items-center mb-6">
+    <div className="bg-white border border-slate-200 rounded-xl p-6" id="risk-calculator">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-slate-200 pb-4">
         <div>
-          <h2 className="text-xl font-bold font-display text-cyan-400">Mechanical Risk Sizer</h2>
-          <p className="text-xs text-slate-600">Position size guidelines respecting the 1-2% risk discipline</p>
+          <div className="text-xs font-mono text-emerald-700">
+            Position Sizing &amp; Capital Preservation
+          </div>
+          <h2 className="text-xl font-bold font-display text-slate-900">
+            Mechanical Risk Sizer
+          </h2>
         </div>
-        <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-700 flex items-center gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          Deriv Lot Protocols
+        <div className="text-xs text-slate-600 font-mono">
+          1%–2% Institutional Risk Protocol · Multi-Asset Lot Engine
         </div>
       </div>
 
@@ -78,16 +76,18 @@ export default function RiskCalculator({
         {/* Left Input Fields Column */}
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-              Trading Capital ($)
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Trading Capital ($ USD)
             </label>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-medium">$</span>
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">
+                $
+              </span>
               <input
                 type="number"
                 value={balance}
                 onChange={(e) => setBalance(Math.max(1, Number(e.target.value)))}
-                className="w-full pl-8 pr-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl focus:border-cyan-400 focus:outline-none transition text-sm font-mono text-slate-900"
+                className="w-full pl-8 pr-4 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="Account Balance"
               />
             </div>
@@ -95,8 +95,8 @@ export default function RiskCalculator({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                Risk Percent (%)
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Risk Allocation (%)
               </label>
               <input
                 type="number"
@@ -105,13 +105,13 @@ export default function RiskCalculator({
                 max="20"
                 value={riskPercent}
                 onChange={(e) => setRiskPercent(Math.max(0.1, Number(e.target.value)))}
-                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl focus:border-cyan-400 focus:outline-none transition text-sm font-mono text-slate-900"
+                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="Risk %"
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                Stop Loss (Points)
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                Stop Loss Distance (Points)
               </label>
               <input
                 type="number"
@@ -119,23 +119,23 @@ export default function RiskCalculator({
                 step="any"
                 value={stopLossPoints}
                 onChange={(e) => setStopLossPoints(Math.max(0.0001, Number(e.target.value)))}
-                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl focus:border-cyan-400 focus:outline-none transition text-sm font-mono text-slate-900"
+                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="SL Price Units"
               />
             </div>
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                Targeted Synthetic Index
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-semibold text-slate-700">
+                Target Instrument
               </label>
               <button
                 type="button"
                 onClick={() => setCustomSymbol(!customSymbol)}
-                className="text-xs text-sky-400 hover:underline"
+                className="text-xs font-semibold text-emerald-700 hover:underline cursor-pointer"
               >
-                {customSymbol ? "Select Presets" : "Use Custom Parameters"}
+                {customSymbol ? "Select Instrument Presets" : "Use Custom Contract Parameters"}
               </button>
             </div>
 
@@ -146,35 +146,35 @@ export default function RiskCalculator({
                   const match = SYNTHETIC_SYMBOLS.find((s) => s.ticker === e.target.value);
                   if (match) setSelectedSymbol(match);
                 }}
-                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl focus:border-cyan-400 focus:outline-none transition text-sm text-slate-900"
+                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm text-slate-900 font-medium"
               >
                 {SYNTHETIC_SYMBOLS.map((s) => (
                   <option key={s.ticker} value={s.ticker}>
-                    {s.name} ({s.ticker}) — Min: {s.minLotSize}
+                    {s.name} ({s.ticker}) — Min Lot: {s.minLotSize}
                   </option>
                 ))}
               </select>
             ) : (
-              <div className="p-3.5 bg-slate-100 border border-slate-200 rounded-xl space-y-3">
+              <div className="p-3.5 bg-[#F8FAF9] border border-slate-200 rounded-lg space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] text-slate-600 uppercase tracking-wide mb-1">Min Lot Size</label>
+                    <label className="block text-xs text-slate-600 mb-1">Min Lot Size</label>
                     <input
                       type="number"
                       step="any"
                       value={customMinLot}
                       onChange={(e) => setCustomMinLot(Math.max(0.0001, Number(e.target.value)))}
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded focus:border-cyan-400 focus:outline-none text-xs font-mono"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-md focus:border-emerald-600 focus:outline-none text-xs font-mono text-slate-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-slate-600 uppercase tracking-wide mb-1">Point Value multiplier</label>
+                    <label className="block text-xs text-slate-600 mb-1">Point Multiplier</label>
                     <input
                       type="number"
                       step="any"
                       value={customPointValue}
                       onChange={(e) => setCustomPointValue(Math.max(0.0001, Number(e.target.value)))}
-                      className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded focus:border-cyan-400 focus:outline-none text-xs font-mono"
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-md focus:border-emerald-600 focus:outline-none text-xs font-mono text-slate-900"
                     />
                   </div>
                 </div>
@@ -184,59 +184,57 @@ export default function RiskCalculator({
         </div>
 
         {/* Right Output Calculations Column */}
-        <div className="bg-slate-100 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
+        <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-4">
-            <div>
-              <p className="text-slate-600 text-xs font-semibold uppercase tracking-wider">Absolute Dollar Risk</p>
-              <div className="flex items-baseline gap-1 mt-1">
-                <p className="text-2xl font-bold font-mono text-rose-400">${dollarRisk.toFixed(2)}</p>
-                <p className="text-xs text-slate-500">({riskPercent}% of balance)</p>
+            <div className="flex items-baseline justify-between border-b border-slate-200 pb-3">
+              <div>
+                <p className="text-slate-600 text-xs font-medium">Capital at Risk</p>
+                <p className="text-xs text-slate-500 mt-0.5">{riskPercent}% of ${balance.toLocaleString()}</p>
               </div>
+              <p className="text-2xl font-bold font-mono text-rose-600 tabular-nums">
+                ${dollarRisk.toFixed(2)}
+              </p>
             </div>
 
             <div>
-              <p className="text-slate-600 text-xs font-semibold uppercase tracking-wider">Calculated Position Size</p>
-              <div className="flex items-baseline gap-1.5 mt-1">
-                <p className="text-4xl font-extrabold font-mono text-emerald-400">
-                  {finalLotSize.toFixed(Math.max(2, String(minRequiredLot).split(".")[1]?.length || 2))}
+              <p className="text-slate-600 text-xs font-medium">Recommended Position Size</p>
+              <div className="flex items-baseline gap-2 mt-1">
+                <p className="text-3xl font-extrabold font-mono text-emerald-700 tabular-nums">
+                  {finalLotSize.toFixed(
+                    selectedSymbol.minLotSize < 0.01
+                      ? 4
+                      : selectedSymbol.minLotSize < 0.1
+                      ? 3
+                      : 2
+                  )}
                 </p>
-                <p className="text-sm font-semibold text-slate-600">Lots</p>
+                <span className="text-xs font-mono text-slate-600 font-semibold">LOTS</span>
               </div>
             </div>
 
-            {/* Warnings Container */}
-            <div className="space-y-2">
-              {isLotSizeBelowMinimum && (
-                <div className="bg-amber-950/40 border border-amber-800/60 p-3 rounded-xl flex items-start gap-2.5">
-                  <ShieldAlert className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-bold text-amber-300">Min Lot Size Constraint</h4>
-                    <p className="text-[10px] text-slate-700">
-                      Ideal lot ({rawLotSize.toFixed(3)}) is below index minimum ({minRequiredLot}). Trading the actual minimum lot will increase your risked capital to{" "}
-                      <span className="font-mono text-amber-200">${(minRequiredLot * stopLossPoints * lotSizeMultiplier).toFixed(2)}</span>.
-                    </p>
-                  </div>
+            {isLotSizeBelowMinimum && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-2.5 text-amber-900 text-xs">
+                <ShieldAlert className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-semibold block">Minimum Lot Floor Reached</span>
+                  <span className="text-amber-800/90 text-[11px] leading-relaxed">
+                    Exact mathematical lot ({rawLotSize.toFixed(4)}) is below {selectedSymbol.name}&apos;s broker minimum ({minRequiredLot}). Executing at minimum lot risks{" "}
+                    <strong className="font-mono">
+                      ${(minRequiredLot * stopLossPoints * lotSizeMultiplier).toFixed(2)}
+                    </strong>
+                    .
+                  </span>
                 </div>
-              )}
-
-              {!customSymbol && selectedSymbol.category === "Boom/Crash" && (
-                <div className="bg-[#1e1515] border border-red-900/40 p-3 rounded-xl flex items-start gap-2.5">
-                  <ShieldAlert className="h-4 w-4 text-rose-500 shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="text-xs font-bold text-red-400">Boom/Crash Spike Precaution</h4>
-                    <p className="text-[10px] text-slate-700">
-                      Standard stop losses can be bypassed during market Spikes (Boom index spikes buy side, Crash spikes sell side). Ensure you use a wide stop loss buffer and conservative lot sizes!
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
-          <div className="border-t border-slate-200 pt-3.5 mt-4">
-            <span className="text-[11px] text-slate-500 italic block leading-normal">
-              Remember: Synthetics run 24/7/365 with unchanging liquidity. Ensure high precision on SL parameters to protect account equity.
+          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
+            <span className="flex items-center gap-1.5">
+              <HelpCircle className="h-3.5 w-3.5 text-emerald-600" />
+              Min Lot: {minRequiredLot}
             </span>
+            <span>Multiplier: {lotSizeMultiplier}x</span>
           </div>
         </div>
       </div>
