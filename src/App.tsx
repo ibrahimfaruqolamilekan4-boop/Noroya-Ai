@@ -23,6 +23,7 @@ import {
   Download,
   Code,
   ArrowLeft,
+  Search,
 } from "lucide-react";
 import { SYNTHETIC_SYMBOLS, SyntheticSymbol, MarketClassType } from "./data/symbols";
 import {
@@ -103,6 +104,7 @@ export default function App() {
   const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
   const [timeframe, setTimeframe] = useState<string>("H1");
   const [customSymbolText, setCustomSymbolText] = useState("");
+  const [symbolSearchQuery, setSymbolSearchQuery] = useState("");
 
   // Live Multi-Provider WebSocket Ingestion (Bybit Linear V5 + Deriv Public WS)
   const { latestCandle, futuresTelemetry, telemetry } = useMarketData(symbol, timeframe);
@@ -912,11 +914,51 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Symbol Selector */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-1.5">
-                    Select Instrument
-                  </label>
+                {/* Symbol Selector with Instant Search */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
+                      Select Instrument
+                    </label>
+                    <span className="text-[10px] font-mono text-slate-400 font-semibold">
+                      {SYNTHETIC_SYMBOLS.filter((s) => {
+                        const inClass = marketClassFilter === "ALL" || s.marketType === marketClassFilter;
+                        if (!inClass) return false;
+                        if (!symbolSearchQuery.trim()) return true;
+                        const q = symbolSearchQuery.toLowerCase().trim();
+                        return (
+                          s.ticker.toLowerCase().includes(q) ||
+                          s.name.toLowerCase().includes(q) ||
+                          (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+                          s.category.toLowerCase().includes(q)
+                        );
+                      }).length} of {SYNTHETIC_SYMBOLS.length} markets
+                    </span>
+                  </div>
+
+                  {/* Instant Search Bar */}
+                  <div className="relative">
+                    <Search className="h-3.5 w-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={symbolSearchQuery}
+                      onChange={(e) => setSymbolSearchQuery(e.target.value)}
+                      placeholder="Search ticker, pair, or index (e.g. BTC, V75, Gold, EUR)..."
+                      className="w-full bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-lg pl-8 pr-7 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none transition-colors font-medium"
+                    />
+                    {symbolSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSymbolSearchQuery("")}
+                        className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Dropdown Selector */}
                   <div className="relative">
                     <select
                       value={symbol.ticker}
@@ -933,10 +975,18 @@ export default function App() {
                     >
                       {(marketClassFilter === "ALL" ||
                         marketClassFilter === "FOREX") && (
-                        <optgroup label="Standard Forex Pairs">
-                          {SYNTHETIC_SYMBOLS.filter(
-                            (s) => s.marketType === "FOREX"
-                          ).map((s) => (
+                        <optgroup label="Standard Forex Pairs & Metals">
+                          {SYNTHETIC_SYMBOLS.filter((s) => {
+                            if (s.marketType !== "FOREX") return false;
+                            if (!symbolSearchQuery.trim()) return true;
+                            const q = symbolSearchQuery.toLowerCase().trim();
+                            return (
+                              s.ticker.toLowerCase().includes(q) ||
+                              s.name.toLowerCase().includes(q) ||
+                              (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+                              s.category.toLowerCase().includes(q)
+                            );
+                          }).map((s) => (
                             <option key={s.ticker} value={s.ticker}>
                               {s.name} ({s.ticker}) — {s.subCategory || s.category}
                             </option>
@@ -946,11 +996,19 @@ export default function App() {
                       {(marketClassFilter === "ALL" ||
                         marketClassFilter === "SYNTHETIC") && (
                         <optgroup label="24/7 Synthetic Indices">
-                          {SYNTHETIC_SYMBOLS.filter(
-                            (s) => s.marketType === "SYNTHETIC"
-                          ).map((s) => (
+                          {SYNTHETIC_SYMBOLS.filter((s) => {
+                            if (s.marketType !== "SYNTHETIC") return false;
+                            if (!symbolSearchQuery.trim()) return true;
+                            const q = symbolSearchQuery.toLowerCase().trim();
+                            return (
+                              s.ticker.toLowerCase().includes(q) ||
+                              s.name.toLowerCase().includes(q) ||
+                              (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+                              s.category.toLowerCase().includes(q)
+                            );
+                          }).map((s) => (
                             <option key={s.ticker} value={s.ticker}>
-                              {s.name} ({s.ticker})
+                              {s.name} ({s.ticker}) — {s.category}
                             </option>
                           ))}
                         </optgroup>
@@ -958,9 +1016,17 @@ export default function App() {
                       {(marketClassFilter === "ALL" ||
                         marketClassFilter === "CRYPTO_PERP") && (
                         <optgroup label="Crypto Perpetuals (Bybit / Binance)">
-                          {SYNTHETIC_SYMBOLS.filter(
-                            (s) => s.marketType === "CRYPTO_PERP"
-                          ).map((s) => (
+                          {SYNTHETIC_SYMBOLS.filter((s) => {
+                            if (s.marketType !== "CRYPTO_PERP") return false;
+                            if (!symbolSearchQuery.trim()) return true;
+                            const q = symbolSearchQuery.toLowerCase().trim();
+                            return (
+                              s.ticker.toLowerCase().includes(q) ||
+                              s.name.toLowerCase().includes(q) ||
+                              (s.subCategory && s.subCategory.toLowerCase().includes(q)) ||
+                              s.category.toLowerCase().includes(q)
+                            );
+                          }).map((s) => (
                             <option key={s.ticker} value={s.ticker}>
                               {s.name} ({s.ticker})
                             </option>

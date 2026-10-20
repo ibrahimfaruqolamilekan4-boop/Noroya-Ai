@@ -402,8 +402,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                   Engineered around ICT London Open (02:00–05:00 EST), New York Open (07:00–10:00 EST), and Silver Bullet (10:00–11:00 EST) Killzones with Asian session Judas swing detection and SMT correlation filtering.
                 </p>
                 <div className="pt-2 space-y-1.5 text-xs font-mono text-slate-700">
-                  <div>EUR/USD · GBP/USD · USD/JPY · XAU/USD</div>
-                  <div>GBP/JPY · EUR/GBP · AUD/USD · USD/ZAR</div>
+                  <div>Majors &amp; Crosses: EUR/USD · GBP/USD · USD/JPY · XAU/USD · GBP/JPY</div>
+                  <div>Exotics &amp; Indices: USD/ZAR · USD/MXN · US100 · US30 · US500 · GER40</div>
                 </div>
               </div>
               <button
@@ -428,14 +428,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                   <Gauge className="h-4 w-4 text-emerald-600" />
                 </div>
                 <h3 className="text-lg font-bold font-display text-slate-900">
-                  Volatility, Boom/Crash &amp; Step
+                  Volatility, Boom/Crash, Step &amp; Jump
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
                   Calibrated for constant algorithmic volatility profiles, zero fundamental news catalysts, pre-spike consolidation bases on Boom 1000 / Crash 500, and ±2.5σ mean-reversion bands on Volatility 75.
                 </p>
                 <div className="pt-2 space-y-1.5 text-xs font-mono text-slate-700">
-                  <div>Volatility 75 · Volatility 100 · Step Index</div>
-                  <div>Boom 1000 · Boom 500 · Crash 1000 · Crash 500</div>
+                  <div>Volatilities: V10–V100 · V10(1s)–V300(1s) · Step &amp; Jump</div>
+                  <div>Spike Series: Boom 300–1000 · Crash 300–1000 · DEX 600–1500</div>
                 </div>
               </div>
               <button
@@ -466,8 +466,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                   Integrates 8-hour Funding Rates &amp; countdown timers, Open Interest (OI) delta flushes, Long/Short ratios, CVD divergences, and 25x/50x/100x Liquidation Heatmap clusters.
                 </p>
                 <div className="pt-2 space-y-1.5 text-xs font-mono text-slate-700">
-                  <div>BTCUSDT.P · ETHUSDT.P · SOLUSDT.P</div>
-                  <div>BNBUSDT.P · XRPUSDT.P · SUIUSDT.P</div>
+                  <div>BTC · ETH · SOL · BNB · XRP · DOGE · SUI · AVAX</div>
+                  <div>LINK · NEAR · APT · PEPE · SHIB · TON · WIF · TAO · FET</div>
                 </div>
               </div>
               <button

@@ -123,7 +123,7 @@ export function getBybitSymbol(ticker: string): string {
     cleaned = cleaned.slice(0, -2);
   }
   // Ensure USDT suffix for crypto linear perps
-  if (!cleaned.endsWith("USDT") && (cleaned.startsWith("BTC") || cleaned.startsWith("ETH") || cleaned.startsWith("SOL") || cleaned.startsWith("BNB") || cleaned.startsWith("XRP") || cleaned.startsWith("SUI"))) {
+  if (!cleaned.endsWith("USDT") && !cleaned.endsWith("USD")) {
     cleaned = `${cleaned}USDT`;
   }
   return cleaned;
@@ -132,25 +132,28 @@ export function getBybitSymbol(ticker: string): string {
 // Map ticker to Deriv technical symbols
 export function getDerivSymbolName(ticker: string): string {
   const map: Record<string, string> = {
-    // Volatility Indices
+    // Volatility Indices (Standard)
     V10: "R_10",
+    V25: "R_25",
+    V50: "R_50",
+    V75: "R_75",
+    V100: "R_100",
+
+    // Volatility Indices (1-Second Cadence)
     V101S: "1HZ10V",
     V151S: "1HZ15V",
-    V25: "R_25",
     V251S: "1HZ25V",
     V301S: "1HZ30V",
-    V50: "R_50",
     V501S: "1HZ50V",
-    V75: "R_75",
     V751S: "1HZ75V",
     V901S: "1HZ90V",
-    V100: "R_100",
     V1001S: "1HZ100V",
     V1501S: "1HZ150V",
     V2001S: "1HZ200V",
     V2501S: "1HZ250V",
     V3001S: "1HZ300V",
-    // Boom & Crash
+
+    // Boom & Crash Suite
     B300: "BOOM300",
     B500: "BOOM500",
     B600: "BOOM600",
@@ -161,16 +164,29 @@ export function getDerivSymbolName(ticker: string): string {
     C600: "CRASH600",
     C900: "CRASH900",
     C1000: "CRASH1000",
-    // Step & Jump
+
+    // Step Indices
     STEP: "stpRNG",
+    STEP200: "stpRNG200",
+    STEP500: "stpRNG500",
+
+    // Jump Indices
     J10: "JD10",
     J25: "JD25",
     J50: "JD50",
     J75: "JD75",
     J100: "JD100",
+
+    // Range Break Indices
     RB100: "RDBR100",
     RB200: "RDBR200",
-    // Forex Pairs
+
+    // DEX Indices
+    DEX600: "DEX600UP",
+    DEX900: "DEX900UP",
+    DEX1500: "DEX1500UP",
+
+    // Major & Minor Forex Pairs
     EURUSD: "frxEURUSD",
     GBPUSD: "frxGBPUSD",
     USDJPY: "frxUSDJPY",
@@ -178,6 +194,7 @@ export function getDerivSymbolName(ticker: string): string {
     USDCAD: "frxUSDCAD",
     USDCHF: "frxUSDCHF",
     NZDUSD: "frxNZDUSD",
+
     EURGBP: "frxEURGBP",
     EURJPY: "frxEURJPY",
     GBPJPY: "frxGBPJPY",
@@ -185,22 +202,58 @@ export function getDerivSymbolName(ticker: string): string {
     CADJPY: "frxCADJPY",
     CHFJPY: "frxCHFJPY",
     NZDJPY: "frxNZDJPY",
+
     EURAUD: "frxEURAUD",
     EURCAD: "frxEURCAD",
+    EURCHF: "frxEURCHF",
+    EURNZD: "frxEURNZD",
+
     GBPAUD: "frxGBPAUD",
     GBPCAD: "frxGBPCAD",
+    GBPCHF: "frxGBPCHF",
+    GBPNZD: "frxGBPNZD",
+
+    AUDCAD: "frxAUDCAD",
+    AUDCHF: "frxAUDCHF",
     AUDNZD: "frxAUDNZD",
+
+    CADCHF: "frxCADCHF",
+    NZDCAD: "frxNZDCAD",
+    NZDCHF: "frxNZDCHF",
+
+    // Emerging Market / Exotic Forex Pairs
     USDZAR: "frxUSDZAR",
     USDMXN: "frxUSDMXN",
     USDTRY: "frxUSDTRY",
-    // Commodities
+    USDSGD: "frxUSDSGD",
+    USDHKD: "frxUSDHKD",
+    USDSEK: "frxUSDSEK",
+    USDNOK: "frxUSDNOK",
+    USDPLN: "frxUSDPLN",
+    USDCNH: "frxUSDCNH",
+
+    // Commodities & Metals
     XAUUSD: "frxXAUUSD",
     XAGUSD: "frxXAGUSD",
     USOIL: "frxUSOIL",
+    UKOIL: "frxUKOIL",
+    COPPER: "frxCOPPER",
+
+    // Global Equity Indices
+    US100: "OTC_NDX",
+    US30: "OTC_DJI",
+    US500: "OTC_SPC",
+    GER40: "OTC_GDAXI",
+    UK100: "OTC_FCHI",
+    JP225: "OTC_N225",
   };
 
   const clean = ticker.toUpperCase().trim();
-  return map[clean] || clean;
+  if (map[clean]) return map[clean];
+  if (clean.length === 6 && !clean.startsWith("FRX") && !clean.startsWith("R_")) {
+    return `frx${clean}`;
+  }
+  return clean;
 }
 
 /**
