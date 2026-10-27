@@ -1,6 +1,6 @@
 {
-  "name": "Synthetic SMC Analytica",
-  "description": "Trading analysis app for Synthetic Indices applying Smart Money Concepts (SMC), Supply/Demand zones, and Fibonacci Retracement on chart uploads, with risk calculators and trade journaling.",
+  "name": "QuantSMC — Multi-Asset Institutional Quantitative Terminal",
+  "description": "Institutional Quantitative Market Analyzer covering Forex, Synthetic Indices, and Crypto Futures (Bybit/Perpetuals) with 5-Module SMC, ICT Killzones, OTE Fibonacci, and Orderflow Confluence.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
