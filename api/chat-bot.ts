@@ -8,7 +8,7 @@ function getGeminiClient(customKey?: string): GoogleGenAI {
   const key = rawKey?.trim().replace(/[\r\n\s]+/g, "");
   if (!key) {
     throw new Error(
-      "GEMINI_API_KEY is not configured. In Vercel: go to your Project Settings > Environment Variables, add GEMINI_API_KEY, and redeploy. You can also paste your Gemini API Key in the Control tab on your device."
+      "GEMINI_API_KEY environment variable is not configured."
     );
   }
   return new GoogleGenAI({

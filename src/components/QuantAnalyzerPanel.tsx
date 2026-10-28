@@ -90,14 +90,14 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
   return (
     <div className="space-y-6 text-slate-900">
       {/* REAL-TIME FEED CONNECTION HUD */}
-      <div className="rounded-xl bg-white border border-slate-200 p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
+      <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-4 flex flex-wrap items-center justify-between gap-3 shadow-2xs">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono text-xs font-semibold">
             <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
             <span>{telemetry.provider}</span>
           </div>
 
-          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
             {telemetry.latencyMs}ms latency
           </span>
 
@@ -122,8 +122,8 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
       {/* ASSET-SPECIFIC QUANTITATIVE TELEMETRY HEADER */}
       {symbol.marketType === "CRYPTO_PERP" && fm && (
-        <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+        <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-3">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-bold font-display text-slate-900">
@@ -139,7 +139,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
           {/* 3-Column Futures Metrics */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <div className="flex items-center justify-between text-xs text-slate-600">
                 <span>Funding Rate (8h)</span>
                 <Clock className="h-3.5 w-3.5 text-emerald-600" />
@@ -165,7 +165,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
               </p>
             </div>
 
-            <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <div className="flex items-center justify-between text-xs text-slate-600">
                 <span>Open Interest (OI)</span>
                 <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />
@@ -192,7 +192,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
               </p>
             </div>
 
-            <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <div className="flex items-center justify-between text-xs text-slate-600">
                 <span>High-Leverage Liquidation Pools</span>
                 <Zap className="h-3.5 w-3.5 text-amber-600" />
@@ -227,27 +227,27 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
       {/* SYNTHETIC INDICES ALGORITHMIC METRICS */}
       {symbol.marketType === "SYNTHETIC" && sp && (
-        <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-3">
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-2.5">
+        <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3">
+          <div className="flex items-center gap-2 border-b border-slate-300 pb-2.5">
             <Layers className="h-4 w-4 text-emerald-600" />
             <h3 className="text-sm font-bold font-display text-slate-900">
               Deriv 24/7 Algorithmic Index Specification
             </h3>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
-            <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <span className="text-slate-500 block">Constant Volatility</span>
               <span className="text-emerald-700 font-bold text-sm mt-0.5 block">
                 {sp.constantVolatilityPct}
               </span>
             </div>
-            <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <span className="text-slate-500 block">Tick Generation</span>
               <span className="text-slate-900 font-semibold mt-0.5 block">
                 {sp.generationEngine}
               </span>
             </div>
-            <div className="p-3 rounded-lg bg-[#F8FAF9] border border-slate-200">
+            <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <span className="text-slate-500 block">Pre-Spike Consolidation Filter</span>
               <span className="text-slate-700 mt-1 block leading-snug">
                 {sp.preSpikeBaseRule}
@@ -258,8 +258,8 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
       )}
 
       {/* MODULE 5: DYNAMIC RISK & EXECUTION OUTPUT CARD */}
-      <div className="rounded-xl bg-white border border-slate-200 p-6 space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+      <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-6 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-300 pb-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               <span>Multi-Factor Confluence Engine</span>
@@ -298,7 +298,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           </div>
 
           {/* Total Confluence Score Gauge */}
-          <div className="flex items-center gap-4 bg-[#F8FAF9] border border-slate-200 rounded-xl px-4 py-3 shrink-0">
+          <div className="flex items-center gap-4 bg-[#E8ECF2] border border-slate-300 rounded-xl px-4 py-3 shrink-0">
             <div>
               <div className="text-[11px] text-slate-500">Confluence Score</div>
               <div className="text-2xl font-mono font-bold text-emerald-700 tabular-nums">
@@ -334,7 +334,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
         {/* Structured Trade Execution Coordinates */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Entry Zone */}
-          <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200 space-y-1">
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>Entry Zone (OTE)</span>
               <Target className="h-3.5 w-3.5 text-emerald-600" />
@@ -364,7 +364,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           </div>
 
           {/* TP1 */}
-          <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200 space-y-1">
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
             <div className="text-xs text-slate-500">TP1 (1.272 Fib Ext)</div>
             <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
               {formatPrice(evaluation.executionCard.tp1_1272, symbol)}
@@ -388,7 +388,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           </div>
 
           {/* TP3 */}
-          <div className="p-3.5 rounded-lg bg-[#F8FAF9] border border-slate-200 space-y-1">
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
             <div className="text-xs text-slate-500">TP3 (2.0 Fib Runner)</div>
             <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
               {formatPrice(evaluation.executionCard.tp3_2000, symbol)}
@@ -400,7 +400,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
         </div>
 
         {/* Sync Levels to Calculator / Chart Button */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-300 text-xs">
           <span className="text-slate-600">
             Order Type:{" "}
             <strong className="text-slate-900 font-mono">
@@ -434,7 +434,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           return (
             <div
               key={mod.id}
-              className={`rounded-xl bg-white border border-slate-200 p-5 space-y-3 ${
+              className={`rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3 ${
                 idx === 4 ? "md:col-span-2" : ""
               }`}
             >
@@ -481,7 +481,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                 {mod.metrics.map((m, i) => (
                   <div
                     key={i}
-                    className="p-2 rounded bg-slate-50 border border-slate-200/70"
+                    className="p-2 rounded bg-slate-50 border border-slate-300/70"
                   >
                     <span className="text-[10px] text-slate-500 block">
                       {m.label}
@@ -503,8 +503,8 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
       {/* DETAILED SMC & FIBONACCI TELEMETRY TABLE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-3">
-          <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-200 pb-2.5">
+        <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3">
+          <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-300 pb-2.5">
             SMC &amp; ICT Structural Mapping
           </h3>
           <div className="space-y-2 text-xs">
@@ -553,8 +553,8 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
           </div>
         </div>
 
-        <div className="rounded-xl bg-white border border-slate-200 p-5 space-y-3">
-          <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-200 pb-2.5">
+        <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3">
+          <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-300 pb-2.5">
             Dynamic Fibonacci &amp; OTE Coordinates
           </h3>
           <div className="space-y-2 text-xs font-mono tabular-nums">

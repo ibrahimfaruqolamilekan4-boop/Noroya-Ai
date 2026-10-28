@@ -57,8 +57,8 @@ export default function RiskCalculator({
   const isLotSizeBelowMinimum = rawLotSize < minRequiredLot;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6" id="risk-calculator">
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-slate-200 pb-4">
+    <div className="bg-[#F1F4F8] border border-slate-300/80 rounded-xl p-6" id="risk-calculator">
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-slate-300 pb-4">
         <div>
           <div className="text-xs font-mono text-emerald-700">
             Position Sizing &amp; Capital Preservation
@@ -87,7 +87,7 @@ export default function RiskCalculator({
                 type="number"
                 value={balance}
                 onChange={(e) => setBalance(Math.max(1, Number(e.target.value)))}
-                className="w-full pl-8 pr-4 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
+                className="w-full pl-8 pr-4 py-2.5 bg-[#E8ECF2] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="Account Balance"
               />
             </div>
@@ -105,7 +105,7 @@ export default function RiskCalculator({
                 max="20"
                 value={riskPercent}
                 onChange={(e) => setRiskPercent(Math.max(0.1, Number(e.target.value)))}
-                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
+                className="w-full px-3.5 py-2.5 bg-[#E8ECF2] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="Risk %"
               />
             </div>
@@ -119,7 +119,7 @@ export default function RiskCalculator({
                 step="any"
                 value={stopLossPoints}
                 onChange={(e) => setStopLossPoints(Math.max(0.0001, Number(e.target.value)))}
-                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
+                className="w-full px-3.5 py-2.5 bg-[#E8ECF2] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm font-mono text-slate-900 tabular-nums"
                 placeholder="SL Price Units"
               />
             </div>
@@ -146,7 +146,7 @@ export default function RiskCalculator({
                   const match = SYNTHETIC_SYMBOLS.find((s) => s.ticker === e.target.value);
                   if (match) setSelectedSymbol(match);
                 }}
-                className="w-full px-3.5 py-2.5 bg-[#F8FAF9] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm text-slate-900 font-medium"
+                className="w-full px-3.5 py-2.5 bg-[#E8ECF2] border border-slate-300 rounded-lg focus:border-emerald-600 focus:bg-white focus:outline-none transition text-sm text-slate-900 font-medium"
               >
                 {SYNTHETIC_SYMBOLS.map((s) => (
                   <option key={s.ticker} value={s.ticker}>
@@ -155,7 +155,7 @@ export default function RiskCalculator({
                 ))}
               </select>
             ) : (
-              <div className="p-3.5 bg-[#F8FAF9] border border-slate-200 rounded-lg space-y-3">
+              <div className="p-3.5 bg-[#E8ECF2] border border-slate-300 rounded-lg space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs text-slate-600 mb-1">Min Lot Size</label>
@@ -184,9 +184,9 @@ export default function RiskCalculator({
         </div>
 
         {/* Right Output Calculations Column */}
-        <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-5 flex flex-col justify-between space-y-4">
+        <div className="bg-[#E8ECF2] border border-slate-300 rounded-xl p-5 flex flex-col justify-between space-y-4">
           <div className="space-y-4">
-            <div className="flex items-baseline justify-between border-b border-slate-200 pb-3">
+            <div className="flex items-baseline justify-between border-b border-slate-300 pb-3">
               <div>
                 <p className="text-slate-600 text-xs font-medium">Capital at Risk</p>
                 <p className="text-xs text-slate-500 mt-0.5">{riskPercent}% of ${balance.toLocaleString()}</p>
@@ -229,7 +229,7 @@ export default function RiskCalculator({
             )}
           </div>
 
-          <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 font-mono">
+          <div className="pt-3 border-t border-slate-300 flex items-center justify-between text-xs text-slate-500 font-mono">
             <span className="flex items-center gap-1.5">
               <HelpCircle className="h-3.5 w-3.5 text-emerald-600" />
               Min Lot: {minRequiredLot}

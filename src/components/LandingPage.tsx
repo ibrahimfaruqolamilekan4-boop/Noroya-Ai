@@ -57,9 +57,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
   ].filter(Boolean);
 
   return (
-    <div className="min-h-screen bg-[#F8FAF9] text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-[#E4E8EE] text-slate-900 flex flex-col">
       {/* STRICT 3-ZONE TOP BAR CONTRACT */}
-      <header className="flex items-center justify-between gap-8 px-6 md:px-12 py-4 border-b border-slate-200/90 bg-white/95 backdrop-blur sticky top-0 z-40">
+      <header className="flex items-center justify-between gap-8 px-6 md:px-12 py-4 border-b border-slate-300/90 bg-[#ECEFF4]/95 backdrop-blur sticky top-0 z-40">
         {/* Zone 1: Single text element wordmark */}
         <a
           href="/"
@@ -72,7 +72,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
         </a>
 
         {/* Zone 2: 4 concise single-line text navigation links */}
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-700">
           <a
             href="#analyzer-preview"
             className="hover:text-emerald-700 hover:underline underline-offset-4 transition-colors whitespace-nowrap shrink-0"
@@ -113,7 +113,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
       </header>
 
       {/* LIVE MULTI-ASSET MARKET TICKER BAR */}
-      <div className="border-b border-slate-200 bg-white px-4 md:px-12 py-2.5 overflow-x-auto">
+      <div className="border-b border-slate-300 bg-[#E8EDF3] px-4 md:px-12 py-2.5 overflow-x-auto">
         <div className="flex items-center gap-7 min-w-max text-xs font-mono tabular-nums">
           {tickerStripSymbols.map((sym, idx) => {
             const deltaPct = (
@@ -133,7 +133,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 <span className="font-bold text-slate-900 group-hover:text-emerald-700">
                   {sym.ticker}
                 </span>
-                <span className="text-slate-600">{formatPrice(liveVal, sym)}</span>
+                <span className="text-slate-700">{formatPrice(liveVal, sym)}</span>
                 <span
                   className={`font-semibold ${
                     isPositive ? "text-emerald-600" : "text-rose-600"
@@ -142,7 +142,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                   {isPositive ? `+${deltaPct}%` : `${deltaPct}%`}
                 </span>
                 {sym.marketType === "CRYPTO_PERP" && sym.futuresMetrics && (
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[11px] text-slate-600">
                     FR {sym.futuresMetrics.fundingRate}
                   </span>
                 )}
@@ -194,13 +194,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
 
                 <a
                   href="#confluence-engine"
-                  className="px-5 py-3.5 rounded-lg bg-white border border-slate-300 hover:border-emerald-600 hover:text-emerald-700 text-slate-800 font-semibold text-sm transition-colors whitespace-nowrap"
+                  className="px-5 py-3.5 rounded-lg bg-[#F1F4F8] border border-slate-300 hover:border-emerald-600 hover:text-emerald-700 text-slate-800 font-semibold text-sm transition-colors whitespace-nowrap"
                 >
                   Inspect 5-Module Architecture
                 </a>
               </div>
 
-              <div className="pt-5 border-t border-slate-200 grid grid-cols-3 gap-4 text-xs">
+              <div className="pt-5 border-t border-slate-300 grid grid-cols-3 gap-4 text-xs">
                 <div>
                   <span className="font-mono text-xl font-bold text-slate-900 block tabular-nums">
                     3 Markets
@@ -226,9 +226,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
           {/* Right Column: Interactive Live AI Quantitative Analyzer Preview */}
           <div
             id="analyzer-preview"
-            className="lg:col-span-7 bg-white border border-slate-200 rounded-xl p-6 flex flex-col justify-between space-y-5 shadow-xs"
+            className="lg:col-span-7 bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 flex flex-col justify-between space-y-5 shadow-xs"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-300 pb-4">
               <div>
                 <div className="flex items-center gap-2 text-xs text-slate-500">
                   <span>Interactive Analyzer Preview</span>
@@ -243,7 +243,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
               </div>
 
               {/* Timeframe Switcher */}
-              <div className="flex items-center gap-1 bg-[#F1F5F3] p-1 rounded-lg border border-slate-200/80">
+              <div className="flex items-center gap-1 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
                 {["M5", "M15", "H1", "H4"].map((tf) => (
                   <button
                     key={tf}
@@ -252,7 +252,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                     className={`px-3 py-1 text-xs font-mono font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       previewTimeframe === tf
                         ? "bg-emerald-600 text-white shadow-xs"
-                        : "text-slate-600 hover:text-slate-900"
+                        : "text-slate-700 hover:text-slate-900"
                     }`}
                   >
                     {tf}
@@ -275,7 +275,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer border whitespace-nowrap shrink-0 ${
                       isSelected
                         ? "bg-emerald-50 border-emerald-600 text-emerald-800"
-                        : "bg-[#F8FAF9] border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300"
+                        : "bg-[#E8ECF2] border-slate-300 text-slate-700 hover:text-slate-900 hover:border-slate-400"
                     }`}
                   >
                     {symItem.ticker}
@@ -285,7 +285,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </div>
 
             {/* Live Confluence Summary Banner */}
-            <div className="bg-[#F8FAF9] border border-slate-200 rounded-lg p-4 space-y-3.5">
+            <div className="bg-[#E8ECF2] border border-slate-300 rounded-lg p-4 space-y-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs">
                   <span className="font-mono font-bold text-emerald-700">
@@ -301,31 +301,31 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 </span>
               </div>
 
-              <p className="text-xs font-mono text-slate-700 leading-relaxed bg-white border border-slate-200/80 rounded-md px-3 py-2">
+              <p className="text-xs font-mono text-slate-700 leading-relaxed bg-[#DFE4EB] border border-slate-300 rounded-md px-3 py-2">
                 {previewQuant.confluenceFormulaBanner}
               </p>
 
               {/* Key Execution Coordinates */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                <div className="p-3 rounded-lg bg-[#F1F4F8] border border-slate-300">
                   <span className="text-[11px] text-slate-500 block">0.705 OTE Entry</span>
                   <span className="text-xs font-mono font-bold text-emerald-700 mt-0.5 block tabular-nums">
                     {formatPrice(previewQuant.executionCard.optimalEntry705, activePreviewSymbol)}
                   </span>
                 </div>
-                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                <div className="p-3 rounded-lg bg-[#F1F4F8] border border-slate-300">
                   <span className="text-[11px] text-slate-500 block">Invalidation SL</span>
                   <span className="text-xs font-mono font-bold text-rose-600 mt-0.5 block tabular-nums">
                     {formatPrice(previewQuant.executionCard.invalidationSL, activePreviewSymbol)}
                   </span>
                 </div>
-                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                <div className="p-3 rounded-lg bg-[#F1F4F8] border border-slate-300">
                   <span className="text-[11px] text-slate-500 block">TP2 (1.618 Fib)</span>
                   <span className="text-xs font-mono font-bold text-emerald-700 mt-0.5 block tabular-nums">
                     {formatPrice(previewQuant.executionCard.tp2_1618, activePreviewSymbol)}
                   </span>
                 </div>
-                <div className="p-3 rounded-lg bg-white border border-slate-200">
+                <div className="p-3 rounded-lg bg-[#F1F4F8] border border-slate-300">
                   <span className="text-[11px] text-slate-500 block">Calculated R:R</span>
                   <span className="text-xs font-mono font-bold text-slate-900 mt-0.5 block tabular-nums">
                     {previewQuant.executionCard.riskRewardRatio}
@@ -339,7 +339,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
               {previewQuant.modules.slice(0, 4).map((m) => (
                 <div
                   key={m.id}
-                  className="p-2.5 rounded-lg bg-[#F8FAF9] border border-slate-200 flex items-center justify-between gap-2"
+                  className="p-2.5 rounded-lg bg-[#E8ECF2] border border-slate-300 flex items-center justify-between gap-2"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
@@ -353,7 +353,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </div>
 
             {/* Direct Action Footer */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-300">
               <span className="text-xs text-slate-600">
                 Full interactive chart, AI vision scanner &amp; position sizer ready
               </span>
@@ -371,7 +371,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
       </section>
 
       {/* MULTI-ASSET MARKET EXPANSION SECTION */}
-      <section id="markets" className="border-t border-slate-200 bg-white py-20 px-6 md:px-12">
+      <section id="markets" className="border-t border-slate-300 bg-[#E8EDF3] py-20 px-6 md:px-12">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="max-w-2xl space-y-2.5">
             <div className="text-xs font-semibold text-emerald-700">
@@ -387,7 +387,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Market 1: Standard Forex Pairs */}
-            <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-6 flex flex-col justify-between space-y-6">
+            <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 flex flex-col justify-between space-y-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-semibold text-emerald-700">
@@ -411,7 +411,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 onClick={() =>
                   onLaunchDashboard(SYNTHETIC_SYMBOLS.find((s) => s.ticker === "EURUSD"))
                 }
-                className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-lg bg-[#E8ECF2] hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>Open Forex Terminal</span>
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -419,7 +419,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </div>
 
             {/* Market 2: Synthetic Indices */}
-            <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-6 flex flex-col justify-between space-y-6">
+            <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 flex flex-col justify-between space-y-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-semibold text-emerald-700">
@@ -443,7 +443,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 onClick={() =>
                   onLaunchDashboard(SYNTHETIC_SYMBOLS.find((s) => s.ticker === "V75"))
                 }
-                className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-lg bg-[#E8ECF2] hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>Open Synthetics Terminal</span>
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -451,7 +451,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </div>
 
             {/* Market 3: Crypto Futures & Perpetuals */}
-            <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-6 flex flex-col justify-between space-y-6">
+            <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 flex flex-col justify-between space-y-6">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-mono font-semibold text-emerald-700">
@@ -475,7 +475,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 onClick={() =>
                   onLaunchDashboard(SYNTHETIC_SYMBOLS.find((s) => s.ticker === "BTCUSDT.P"))
                 }
-                className="w-full py-2.5 px-4 rounded-lg bg-white hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                className="w-full py-2.5 px-4 rounded-lg bg-[#E8ECF2] hover:bg-emerald-600 hover:text-white hover:border-emerald-600 border border-slate-300 text-xs font-semibold text-slate-900 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <span>Open Crypto Perps Terminal</span>
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -500,7 +500,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+          <div className="md:col-span-2 bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
               01. Smart Money Concepts (SMC) &amp; ICT Framework
             </span>
@@ -512,7 +512,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+          <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
               02. Advanced Fibonacci Confluence
             </span>
@@ -524,7 +524,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+          <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
               03. Institutional Price Action
             </span>
@@ -536,7 +536,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </p>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+          <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
               04. Asset-Specific Quantitative Filters
             </span>
@@ -548,7 +548,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             </p>
           </div>
 
-          <div id="execution-architecture" className="bg-white border border-slate-200 rounded-xl p-6 space-y-3">
+          <div id="execution-architecture" className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
               05. Dynamic Risk &amp; Execution Output
             </span>
@@ -588,7 +588,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
       </section>
 
       {/* QUIET FOOTER */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-6 px-6 md:px-12 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <footer className="mt-auto border-t border-slate-300 bg-[#ECEFF4] py-6 px-6 md:px-12 text-xs text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-4">
         <span>QuantSMC Institutional Multi-Asset Analyzer · Standalone PWA Terminal</span>
         <span>Forex · Synthetic Indices · Crypto Futures (Bybit/Perpetuals)</span>
       </footer>

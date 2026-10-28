@@ -115,8 +115,8 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
   return (
     <div className="space-y-6" id="database-setup">
       {/* 1. FIREBASE CLOUD VAULT SECTION */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-200 pb-4">
+      <div className="bg-[#F1F4F8] border border-slate-300/80 rounded-xl p-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 border-b border-slate-300 pb-4">
           <div className="flex items-center gap-3">
             <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg text-emerald-700">
               <Database className="h-5 w-5" />
@@ -138,9 +138,9 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
             Authenticating cloud access credentials...
           </div>
         ) : firebaseUser ? (
-          <div className="bg-[#F8FAF9] border border-slate-200 rounded-xl p-5 space-y-4">
+          <div className="bg-[#E8ECF2] border border-slate-300 rounded-xl p-5 space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-3 bg-white px-4 py-3 rounded-lg border border-slate-200 w-full sm:w-auto">
+              <div className="flex items-center gap-3 bg-[#F1F4F8] px-4 py-3 rounded-lg border border-slate-300 w-full sm:w-auto">
                 <div className="h-9 w-9 bg-emerald-600 rounded-full flex items-center justify-center font-bold font-display text-white text-sm">
                   {firebaseUser.email ? firebaseUser.email[0].toUpperCase() : "U"}
                 </div>
@@ -212,9 +212,9 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
               </div>
             )}
 
-            <div className="p-4 rounded-lg border border-slate-200 bg-[#F8FAF9] flex gap-2.5">
+            <div className="p-4 rounded-lg border border-slate-300 bg-[#E8ECF2] flex gap-2.5">
               <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-600 leading-normal">
+              <p className="text-xs text-slate-700 leading-normal">
                 Zero-Login Operation: You can use the full quantitative analyzer, risk calculator, and local trade journal without signing in.
               </p>
             </div>
@@ -223,8 +223,8 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
       </div>
 
       {/* 2. SYSTEM DIAGNOSTICS & CACHE MANAGEMENT */}
-      <div className="bg-white border border-slate-200 rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-4 border-b border-slate-200 pb-4">
+      <div className="bg-[#F1F4F8] border border-slate-300/80 rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-4 border-b border-slate-300 pb-4">
           <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg text-emerald-700">
             <Zap className="h-5 w-5" />
           </div>
