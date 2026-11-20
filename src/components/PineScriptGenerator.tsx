@@ -139,9 +139,9 @@ plotshape(inRetestRange and ta.crossover(close, open), title="Spike Retest Confl
   };
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-6" id="pine-script-workstation-panel">
+    <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-6" id="pine-script-workstation-panel">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-200 pb-4 mb-5">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-300 pb-4 mb-5">
         <div>
           <div className="text-xs font-mono text-emerald-700">
             TradingView Pine Script v5 Integration

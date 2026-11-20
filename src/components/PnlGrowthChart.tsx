@@ -50,7 +50,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
 
   if (closedTrades.length === 0) {
     return (
-      <div className="bg-white border border-slate-200 rounded-xl p-8 text-center space-y-3" id="pnl-chart-empty">
+      <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-8 text-center space-y-3" id="pnl-chart-empty">
         <div className="mx-auto w-11 h-11 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center">
           <TrendingUp className="h-5 w-5 text-emerald-600" />
         </div>
@@ -145,7 +145,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
       const data = payload[0].payload;
       if (data.index === 0) {
         return (
-          <div className="bg-white border border-slate-200 p-2.5 rounded-lg shadow-md text-xs text-slate-600 font-mono">
+          <div className="bg-[#F1F4F8] border border-slate-300 p-2.5 rounded-lg shadow-md text-xs text-slate-600 font-mono">
             Ledger Baseline ($0.00)
           </div>
         );
@@ -154,7 +154,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
       const isTradeProfit = data.pnl >= 0;
 
       return (
-        <div className="bg-white border border-slate-200 p-3 rounded-lg shadow-lg text-xs space-y-1.5 min-w-[200px]">
+        <div className="bg-[#F1F4F8] border border-slate-300 p-3 rounded-lg shadow-lg text-xs space-y-1.5 min-w-[200px]">
           <div className="flex items-center justify-between border-b border-slate-100 pb-1">
             <span className="text-[11px] text-slate-500 font-mono">Trade #{data.index}</span>
             <span className="text-[11px] text-slate-500 font-mono">{data.date}</span>
@@ -184,8 +184,8 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" id="pnl-growth-visualization">
       {/* Chart container column */}
-      <div className="lg:col-span-3 bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+      <div className="lg:col-span-3 bg-[#F1F4F8] border border-slate-300 rounded-xl p-5 flex flex-col justify-between space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-300 pb-3">
           <div>
             <div className="text-xs font-mono text-emerald-700">Realized Ledger Telemetry</div>
             <h3 className="text-base font-bold text-slate-900 font-display">
@@ -251,8 +251,8 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
       </div>
 
       {/* Analytic Statistics Column */}
-      <div className="bg-white border border-slate-200 rounded-xl p-5 flex flex-col justify-between space-y-4">
-        <div className="border-b border-slate-200 pb-3">
+      <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-5 flex flex-col justify-between space-y-4">
+        <div className="border-b border-slate-300 pb-3">
           <div className="text-xs font-mono text-emerald-700">Risk Metrics</div>
           <h3 className="text-base font-bold text-slate-900 font-display flex items-center gap-1.5">
             <Award className="h-4 w-4 text-emerald-600" />
@@ -261,7 +261,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
         </div>
 
         <div className="space-y-3 my-auto">
-          <div className="bg-[#F8FAF9] p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="bg-[#E8ECF2] p-3 rounded-lg border border-slate-300 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ArrowUpRight className="h-4 w-4 text-emerald-600" />
               <span className="text-xs text-slate-700 font-medium">Best Single Trade</span>
@@ -271,7 +271,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
             </span>
           </div>
 
-          <div className="bg-[#F8FAF9] p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="bg-[#E8ECF2] p-3 rounded-lg border border-slate-300 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ArrowDownRight className="h-4 w-4 text-rose-600" />
               <span className="text-xs text-slate-700 font-medium">Largest Drawdown Hit</span>
@@ -284,7 +284,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
             </span>
           </div>
 
-          <div className="bg-[#F8FAF9] p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="bg-[#E8ECF2] p-3 rounded-lg border border-slate-300 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-emerald-600" />
               <span className="text-xs text-slate-700 font-medium">Max Win Streak</span>
@@ -294,7 +294,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
             </span>
           </div>
 
-          <div className="bg-[#F8FAF9] p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="bg-[#E8ECF2] p-3 rounded-lg border border-slate-300 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-amber-600" />
               <span className="text-xs text-slate-700 font-medium">Max Loss Streak</span>
@@ -307,7 +307,7 @@ export default function PnlGrowthChart({ trades }: PnlGrowthChartProps) {
             </span>
           </div>
 
-          <div className="bg-[#F8FAF9] p-3 rounded-lg border border-slate-200 flex items-center justify-between">
+          <div className="bg-[#E8ECF2] p-3 rounded-lg border border-slate-300 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <RefreshCcw className="h-4 w-4 text-rose-600" />
               <span className="text-xs text-slate-700 font-medium">Peak Equity Drawdown</span>

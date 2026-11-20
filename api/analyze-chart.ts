@@ -7,9 +7,7 @@ function getGeminiClient(customKey?: string): GoogleGenAI {
     process.env.VITE_GEMINI_API_KEY;
   const key = rawKey?.trim().replace(/[\r\n\s]+/g, "");
   if (!key) {
-    throw new Error(
-      "GEMINI_API_KEY environment variable is not configured."
-    );
+    throw new Error("GEMINI_API_KEY environment variable is not configured.");
   }
   return new GoogleGenAI({
     apiKey: key,
@@ -25,45 +23,51 @@ async function generateGeminiContent(
   ai: GoogleGenAI,
   primaryModel: string,
   params: any
-): Promise<any> {
-  const modelsToTry = [primaryModel];
-  if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.6-flash", "gemini-3.1-flash-lite");
-  } else {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash");
-  }
+): Promise<{ response: any; modelUsed: string }> {
+  const modelsToTry = Array.from(
+    new Set([primaryModel, "gemini-4-hydrogen", "gemini-3.1-flash-lite"])
+  );
 
-  const uniqueModels = Array.from(new Set(modelsToTry));
   const delayHelper = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   let lastError: any = null;
 
-  for (const modelName of uniqueModels) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
+  for (const modelName of modelsToTry) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const requestParams = {
+        const sanitizedConfig = { ...(params.config || {}) };
+        // Gemini 4 series rejects deprecated sampling parameters
+        if (modelName.startsWith("gemini-4")) {
+          delete sanitizedConfig.temperature;
+          delete sanitizedConfig.topP;
+          delete sanitizedConfig.topK;
+          delete sanitizedConfig.candidateCount;
+        }
+
+        const response = await ai.models.generateContent({
           ...params,
           model: modelName,
-        };
-        const response = await ai.models.generateContent(requestParams);
-        return response;
+          config: sanitizedConfig,
+        });
+        return { response, modelUsed: modelName };
       } catch (err: any) {
         lastError = err;
-        const errMsg = String(err.message || err.status || "").toLowerCase();
-        const responseBody = err.response ? String(JSON.stringify(err.response)) : "";
-        const combinedErrorString = `${errMsg} ${responseBody}`.toLowerCase();
+        const errMsg = String(err?.message || err?.status || "").toLowerCase();
+        const responseBody = err?.response ? String(JSON.stringify(err.response)) : "";
+        const combined = `${errMsg} ${responseBody}`.toLowerCase();
 
-        const isFatal =
-          combinedErrorString.includes("api_key_invalid") ||
-          combinedErrorString.includes("api key not valid") ||
-          combinedErrorString.includes("invalid key") ||
-          combinedErrorString.includes("unauthorized") ||
-          combinedErrorString.includes("bad credentials") ||
-          err.status === 400 || err.status === 401 || err.status === 403;
+        const isAuthFatal =
+          combined.includes("api_key_invalid") ||
+          combined.includes("api key not valid") ||
+          combined.includes("invalid key") ||
+          combined.includes("unauthorized") ||
+          err?.status === 401 ||
+          err?.status === 403;
 
-        if (!isFatal && attempt < 3) {
-          await delayHelper(attempt * 1000);
-        } else {
-          break;
+        if (isAuthFatal) {
+          throw err;
+        }
+        if (attempt < 2) {
+          await delayHelper(attempt * 700);
         }
       }
     }
@@ -72,8 +76,316 @@ async function generateGeminiContent(
   throw lastError;
 }
 
+function getSessionWindows() {
+  const nyTimeStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
+  const nyDate = new Date(nyTimeStr);
+  const nyHour = nyDate.getHours();
+  const nyMin = nyDate.getMinutes();
+  const nyDecimal = nyHour + nyMin / 60;
+
+  let killZoneStatus: "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
+  let killZoneName = "Outside Killzone (Consolidation)";
+  if (nyDecimal >= 2.0 && nyDecimal <= 5.0) {
+    killZoneStatus = "ACTIVE_LONDON";
+    killZoneName = "London Open Killzone (02:00–05:00 EST)";
+  } else if (nyDecimal >= 7.0 && nyDecimal <= 10.5) {
+    killZoneStatus = "ACTIVE_NY";
+    killZoneName = "New York AM Killzone (07:00–10:30 EST)";
+  } else if (nyDecimal >= 14.0 && nyDecimal <= 16.0) {
+    killZoneStatus = "ACTIVE_NY_PM";
+    killZoneName = "NY PM / London Close Window (14:00–16:00 EST)";
+  }
+
+  let silverBulletStatus: "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
+  let silverBulletName = "Inactive";
+  if (nyHour === 3) {
+    silverBulletStatus = "ACTIVE_LONDON";
+    silverBulletName = "London Open Silver Bullet (03:00–04:00 EST)";
+  } else if (nyHour === 10) {
+    silverBulletStatus = "ACTIVE_NY_AM";
+    silverBulletName = "NY AM Silver Bullet (10:00–11:00 EST)";
+  } else if (nyHour === 14) {
+    silverBulletStatus = "ACTIVE_NY_PM";
+    silverBulletName = "NY PM Silver Bullet (14:00–15:00 EST)";
+  }
+
+  return { nyTimeStr, killZoneStatus, killZoneName, silverBulletStatus, silverBulletName };
+}
+
+function buildDeterministicQuantReport(
+  symbol: string,
+  timeframe: string,
+  currentPrice?: number,
+  quantContext?: any,
+  reasonNote?: string
+) {
+  const { killZoneStatus, killZoneName, silverBulletStatus, silverBulletName } = getSessionWindows();
+
+  if (quantContext && quantContext.executionCard && quantContext.fibonacci) {
+    const q = quantContext;
+    const exec = q.executionCard;
+    const fib = q.fibonacci;
+    const struct = q.structure || {};
+    const mtf = q.mtf || {};
+    const primaryOb = Array.isArray(q.orderBlocks) && q.orderBlocks.length > 0 ? q.orderBlocks[q.orderBlocks.length - 1] : null;
+    const primaryFvg = Array.isArray(q.fairValueGaps) && q.fairValueGaps.length > 0 ? q.fairValueGaps[q.fairValueGaps.length - 1] : null;
+
+    const isBull = q.directionalBias === "BULLISH";
+    const isBear = q.directionalBias === "BEARISH";
+    const bias: "BULLISH" | "BEARISH" | "NEUTRAL" = isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL";
+    const setupType: "BUY" | "SELL" | "WAIT" =
+      exec.orderType === "BUY LIMIT" ? "BUY" : exec.orderType === "SELL LIMIT" ? "SELL" : "WAIT";
+
+    const roundVal = (n: number) => {
+      const ref = Number(q.livePrice || currentPrice || 1);
+      return Number(Number(n || 0).toFixed(ref < 5 ? 5 : ref < 50 ? 3 : 2));
+    };
+
+    const entry = roundVal(exec.optimalEntry705);
+    const stopLoss = roundVal(exec.invalidationSL);
+    const tp1 = roundVal(exec.tp1_1272);
+    const tp2 = roundVal(exec.tp2_1618);
+    const tp3 = roundVal(exec.tp3_2000);
+
+    const dealingPos =
+      fib.currentZone === "DISCOUNT"
+        ? "DISCOUNT_OTE"
+        : fib.currentZone === "PREMIUM"
+        ? "PREMIUM_OTE"
+        : "EQUILIBRIUM";
+
+    const sweepType = struct.liquiditySweepDetected
+      ? isBull
+        ? "LOW_SWEPT"
+        : "HIGH_SWEPT"
+      : "NONE";
+
+    return {
+      engineMode: "DETERMINISTIC_QUANT_ENGINE",
+      modelUsed: "QuantSMC Local Mathematical Engine",
+      engineNotice: reasonNote || "Generated directly from live OHLC mathematical structure.",
+      imageQuality: {
+        status: "passed",
+        details: `Computed directly from live ${symbol} (${timeframe}) OHLC candles, 5-bar fractal swings, and MTF D1/H4 feeds.`,
+      },
+      bias,
+      marketStructure: `${struct.ltfStructure || "Range structure"} · HTF: ${struct.htfStructure || "Syncing"}`,
+      confluenceScore: Number(((q.confluenceScorePct || 50) / 20).toFixed(1)),
+      confluenceScorePct: q.confluenceScorePct || 50,
+      alignedModulesCount: q.alignedModulesCount || 0,
+      confluenceFormula: q.confluenceFormula || "Mathematical 5-Module SMC Evaluation",
+      antiStopLossShield: {
+        structuralInvalidationPrice: stopLoss,
+        bufferPipsApplied: Number(Math.abs(entry - stopLoss).toFixed(entry < 5 ? 4 : 2)),
+        protectionRationale: `${exec.atrBufferApplied}. Placed behind confirmed structural displacement origin rather than obvious swing wicks.`,
+        dealingRangePosition: dealingPos,
+      },
+      killZone: {
+        status: killZoneStatus,
+        windowName: killZoneName,
+        details:
+          killZoneStatus === "INACTIVE"
+            ? "Currently outside peak London/NY institutional killzones — expect tighter ranges or wait for session open."
+            : `Active ${killZoneName}. Monitor liquidity sweeps against Asian/PDH-PDL boundaries.`,
+      },
+      silverBullet: {
+        status: silverBulletStatus,
+        windowName: silverBulletName,
+        details:
+          silverBulletStatus === "INACTIVE"
+            ? "No Silver Bullet hourly window active right now."
+            : `Active ${silverBulletName} — prioritize clean FVG rebalance entries.`,
+      },
+      candleRangeTheory: {
+        rangeHigh: roundVal(fib.swingHigh),
+        rangeLow: roundVal(fib.swingLow),
+        sweepType,
+        deliveryDirection: bias,
+        description: struct.sweepDescription || "Monitoring dealing range boundaries for external liquidity sweep.",
+      },
+      judasSwing: {
+        detected: Boolean(struct.liquiditySweepDetected),
+        direction: bias,
+        triggerLevel: roundVal(isBull ? struct.sslPool || fib.swingLow : struct.bslPool || fib.swingHigh),
+        description: struct.liquiditySweepDetected
+          ? `Liquidity probe beyond ${roundVal(isBull ? struct.sslPool : struct.bslPool)} detected with rejection back into dealing range.`
+          : "No confirmed Judas Swing liquidity probe yet on current candle sequence.",
+      },
+      powerOf3: {
+        detected: Boolean(struct.asianHigh && struct.asianLow),
+        accumulationRange:
+          struct.asianLow && struct.asianHigh
+            ? `${roundVal(struct.asianLow)} – ${roundVal(struct.asianHigh)}`
+            : `${roundVal(fib.swingLow)} – ${roundVal(fib.equilibrium50)}`,
+        manipulationLevel: roundVal(isBull ? struct.asianLow || struct.sslPool : struct.asianHigh || struct.bslPool),
+        distributionTarget: tp2,
+        description:
+          struct.asianHigh && struct.asianLow
+            ? "Asian session range mapped as Accumulation phase; monitor sweep for Manipulation and expansion toward TP2."
+            : "Dealing range mapped for Accumulation-Manipulation-Distribution sequencing.",
+      },
+      multiTimeframe: {
+        isMultiTimeframe: true,
+        htfBias1D: `${mtf.d1Bias || "RANGING"} — ${mtf.d1Event || "Syncing Daily structure"}`,
+        intermediateStructure4H: `${mtf.h4Bias || "RANGING"} — ${mtf.h4Event || "Syncing 4H structure"}`,
+        entryPrecision30M: `${struct.ltfStructure || timeframe} · Entry zone ${roundVal(exec.entryZoneLow)}–${roundVal(exec.entryZoneHigh)}`,
+        confirmationMessage: mtf.note || "Top-down MTF structural alignment computed from live candles.",
+      },
+      suggestedRisk:
+        setupType === "WAIT"
+          ? "0% — Stand aside. Setup does not meet >= 3/5 module confluence and >= 1:2.0 R:R gate."
+          : "0.5% to 1.0% risk per position. Scale 40% at TP1 and move SL to breakeven.",
+      doActions:
+        setupType === "WAIT"
+          ? [
+              `Wait for price to retrace into ${isBull ? "Discount (<50%)" : "Premium (>50%)"} OTE zone (${roundVal(exec.entryZoneLow)}–${roundVal(exec.entryZoneHigh)}).`,
+              "Require a confirmed LTF BOS/CHoCH displacement candle after a liquidity sweep before deploying capital.",
+              "Verify at least 3 of 5 quantitative modules align with R:R >= 1:2.0.",
+            ]
+          : [
+              `Place disciplined ${exec.orderType} near ${entry} inside ${struct.pdArrayType}.`,
+              `Take partial profits at TP1 (${tp1}) and move SL to breakeven.`,
+              `Hold core runner toward TP2 (${tp2}) and TP3 (${tp3}).`,
+            ],
+      dontActions: [
+        "Do NOT chase mid-range candles in Equilibrium without an unmitigated OB or FVG.",
+        "Do NOT tighten Stop Loss inside the structural liquidity sweep wick.",
+        "Do NOT override the 1:2.0 minimum asymmetric Risk:Reward gate.",
+      ],
+      detailedVisualDescription: `Deterministic mathematical scan on ${symbol} (${timeframe}) at live price ${roundVal(q.livePrice || currentPrice)}. Found ${q.orderBlocks?.length || 0} active Order Block(s), ${q.fairValueGaps?.length || 0} open Fair Value Gap(s), and ${q.alignedModulesCount}/5 aligned quantitative modules (${q.confluenceScorePct}%).`,
+      orderBlock: {
+        priceRange: primaryOb
+          ? `${roundVal(primaryOb.bottom)} – ${roundVal(primaryOb.top)}`
+          : `${roundVal(exec.entryZoneLow)} – ${roundVal(exec.entryZoneHigh)}`,
+        type: primaryOb ? `${primaryOb.type.replace(/_/g, " ")} (${primaryOb.status})` : struct.pdArrayType || "Order Block",
+        rationale: primaryOb
+          ? `Confirmed ${primaryOb.displacementAtrMultiple}x ATR displacement origin candle (${primaryOb.status.toLowerCase()}).`
+          : "Anchored to institutional OTE dealing range boundary.",
+      },
+      supplyDemandZones: {
+        supply: `${roundVal(fib.equilibrium50)} – ${roundVal(fib.swingHigh)}`,
+        demand: `${roundVal(fib.swingLow)} – ${roundVal(fib.equilibrium50)}`,
+        activeZone: `${fib.currentZone} Zone`,
+      },
+      liquidityVoid: {
+        priceRange: primaryFvg
+          ? `${roundVal(primaryFvg.bottom)} – ${roundVal(primaryFvg.top)}`
+          : "No open FVG above 0.15x ATR",
+        description: primaryFvg
+          ? `${primaryFvg.type} FVG (${primaryFvg.status}) with 50% CE at ${roundVal(primaryFvg.midpointCE)}.`
+          : "Price delivery balanced; no wide unmitigated imbalance currently open.",
+      },
+      vacuumBlock: {
+        priceRange: `${roundVal(Math.min(entry, stopLoss))} – ${roundVal(Math.max(entry, stopLoss))}`,
+        description: "Structural displacement origin protecting invalidation stop loss.",
+      },
+      candlestickPatterns: {
+        patternName: q.candlestickTrigger?.patternName || "Monitoring closed candle trigger",
+        context: q.candlestickTrigger?.details || "Evaluating closed-bar displacement near HTF POI.",
+      },
+      fibonacciRetracement: {
+        level_50: roundVal(fib.equilibrium50),
+        level_618: roundVal(fib.ote618),
+        level_705: roundVal(fib.ote705SweetSpot),
+        level_786: roundVal(fib.ote786),
+        ext_1272: tp1,
+        ext_1618: tp2,
+        ext_2000: tp3,
+        description: fib.filterExplanation || "Fibonacci dealing range anchored to confirmed fractal swings.",
+      },
+      tradeSetup: {
+        type: setupType,
+        entry,
+        stopLoss,
+        takeProfits: [tp1, tp2, tp3],
+        riskRewardRatio: exec.riskRewardRatio || "1:2.0",
+        rationale:
+          setupType === "WAIT"
+            ? `Gated to WAIT: ${q.alignedModulesCount}/5 modules aligned (R:R ${exec.riskRewardRatio}). ${mtf.note || ""}`
+            : `${exec.orderType} triggered at ${entry} (${q.confluenceScorePct}% confluence, ${exec.riskRewardRatio} R:R). ${mtf.note || ""}`,
+      },
+      educationalInsight:
+        "Institutional consistency comes from enforcing strict mechanical gates: only executing when HTF structure, Discount/Premium OTE, and asymmetric Risk:Reward (>= 1:2.0) align simultaneously.",
+    };
+  }
+
+  // Minimal safe neutral WAIT fallback if no quantContext was provided at all
+  const base = currentPrice && currentPrice > 0 ? currentPrice : 1.085;
+  const dec = base < 5 ? 4 : 2;
+  const step = base * 0.005;
+  return {
+    engineMode: "DETERMINISTIC_QUANT_ENGINE",
+    modelUsed: "QuantSMC Safety Gate",
+    engineNotice: reasonNote || "Awaiting live candle telemetry before issuing directional bias.",
+    imageQuality: { status: "passed", details: "Chart received; live candle history still initializing." },
+    bias: "NEUTRAL",
+    marketStructure: "Insufficient candle telemetry — defaulting to capital-preservation WAIT.",
+    confluenceScore: 2.0,
+    confluenceScorePct: 40,
+    alignedModulesCount: 1,
+    confluenceFormula: "Awaiting live candle backfill & structural BOS/CHoCH confirmation",
+    antiStopLossShield: {
+      structuralInvalidationPrice: Number((base - step).toFixed(dec)),
+      bufferPipsApplied: 0,
+      protectionRationale: "Wait for live OHLC feed to compute true 14-period ATR invalidation.",
+      dealingRangePosition: "EQUILIBRIUM",
+    },
+    killZone: { status: killZoneStatus, windowName: killZoneName, details: `Current window: ${killZoneName}.` },
+    silverBullet: { status: silverBulletStatus, windowName: silverBulletName, details: `Status: ${silverBulletName}.` },
+    candleRangeTheory: {
+      rangeHigh: Number((base + step).toFixed(dec)),
+      rangeLow: Number((base - step).toFixed(dec)),
+      sweepType: "NONE",
+      deliveryDirection: "NEUTRAL",
+      description: "Awaiting range liquidity sweep.",
+    },
+    judasSwing: { detected: false, direction: "NEUTRAL", triggerLevel: base, description: "No sweep confirmed." },
+    powerOf3: {
+      detected: false,
+      accumulationRange: `${(base - step).toFixed(dec)} – ${(base + step).toFixed(dec)}`,
+      manipulationLevel: base,
+      distributionTarget: base,
+      description: "Waiting for Accumulation range expansion.",
+    },
+    multiTimeframe: {
+      isMultiTimeframe: false,
+      htfBias1D: "NEUTRAL — Syncing Daily feed",
+      intermediateStructure4H: "NEUTRAL — Syncing 4H feed",
+      entryPrecision30M: `Awaiting live ${timeframe} candles`,
+      confirmationMessage: "Allow live feed to finish backfilling candles, then re-run Hybrid Scan.",
+    },
+    suggestedRisk: "0% — Stand aside until live candle structure confirms.",
+    doActions: ["Allow live feed to load 300 bars before scanning.", "Re-run Hybrid Quant + AI Vision Scan."],
+    dontActions: ["Do not execute blind trades without structural confluence."],
+    detailedVisualDescription: `No active high-probability edge confirmed on ${symbol} (${timeframe}).`,
+    orderBlock: { priceRange: "Pending scan", type: "None", rationale: "Awaiting displacement candle." },
+    supplyDemandZones: { supply: "Pending", demand: "Pending", activeZone: "Equilibrium" },
+    liquidityVoid: { priceRange: "Pending", description: "Awaiting FVG scan." },
+    vacuumBlock: { priceRange: "Pending", description: "N/A" },
+    candlestickPatterns: { patternName: "None", context: "Waiting for closed bar at POI." },
+    fibonacciRetracement: {
+      level_50: base,
+      level_618: base,
+      level_705: base,
+      level_786: base,
+      ext_1272: base,
+      ext_1618: base,
+      ext_2000: base,
+      description: "Awaiting confirmed fractal swings.",
+    },
+    tradeSetup: {
+      type: "WAIT",
+      entry: base,
+      stopLoss: Number((base - step).toFixed(dec)),
+      takeProfits: [Number((base + step).toFixed(dec)), Number((base + step * 2).toFixed(dec)), Number((base + step * 3).toFixed(dec))],
+      riskRewardRatio: "1:0.0",
+      rationale: "Stand aside (WAIT) until live candle structure and AI Vision verify >= 3/5 modules.",
+    },
+    educationalInsight: "No trade is also a position. Capital preservation during unclear structure is the #1 institutional edge.",
+  };
+}
+
 export default async function handler(req: any, res: any) {
-  // CORS & Preflight headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-gemini-key, Cache-Control, Pragma");
@@ -92,305 +404,125 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
+  const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice, quantContext } = req.body || {};
+
   try {
-    const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice } = req.body || {};
-
-    if (!image && (!images || !Array.isArray(images) || images.length === 0)) {
-      const fallbackData = generateFallbackSMCAnalysis(symbol || "Market Asset", timeframe || "H1", currentPrice);
-      res.status(200).json({
-        success: true,
-        data: fallbackData,
-      });
-      return;
-    }
-
     const contentParts: any[] = [];
+    const imgList = Array.isArray(images) && images.length > 0 ? images : image ? [image] : [];
 
-    if (images && Array.isArray(images) && images.length > 0) {
-      for (const img of images) {
-        if (!img) continue;
-        let base64Data = img.replace(/\s+/g, "");
-        let mimeType = "image/png";
-        if (img.startsWith("data:")) {
-          const parts = img.split(";base64,");
-          if (parts.length === 2) {
-            mimeType = parts[0].replace("data:", "");
-            base64Data = parts[1].replace(/\s+/g, "");
-          }
-        }
-        contentParts.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Data,
-          },
-        });
-      }
-    } else if (image) {
-      let base64Data = image.replace(/\s+/g, "");
+    for (const img of imgList) {
+      if (!img || typeof img !== "string") continue;
+      let base64Data = img.replace(/\s+/g, "");
       let mimeType = "image/png";
-      if (image.startsWith("data:")) {
-        const parts = image.split(";base64,");
+      if (img.startsWith("data:")) {
+        const parts = img.split(";base64,");
         if (parts.length === 2) {
           mimeType = parts[0].replace("data:", "");
           base64Data = parts[1].replace(/\s+/g, "");
         }
       }
-      contentParts.push({
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Data,
-        },
-      });
+      if (base64Data.length > 50) {
+        contentParts.push({ inlineData: { mimeType, data: base64Data } });
+      }
     }
 
-    const nyTimeStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-    const nyDate = new Date(nyTimeStr);
-    const nyHour = nyDate.getHours();
-    const nyMin = nyDate.getMinutes();
-    const nyDecimal = nyHour + nyMin / 60;
-
-    let killZoneStatus: "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-    let killZoneName = "Inactive";
-    if (nyDecimal >= 2.0 && nyDecimal <= 5.0) {
-      killZoneStatus = "ACTIVE_LONDON";
-      killZoneName = "London Kill Zone (2:00-5:00 AM EST / 07:00-10:00 GMT)";
-    } else if (nyDecimal >= 9.5 && nyDecimal <= 12.0) {
-      killZoneStatus = "ACTIVE_NY";
-      killZoneName = "New York AM Kill Zone (9:30 AM-12:00 PM EST / 14:30-17:00 GMT - Strongest)";
-    } else if (nyDecimal >= 15.0 && nyDecimal <= 17.0) {
-      killZoneStatus = "ACTIVE_NY_PM";
-      killZoneName = "London Close / NY PM Kill Zone (3:00-5:00 PM EST)";
-    }
-
-    let silverBulletStatus: "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-    let silverBulletName = "Inactive";
-    if (nyHour === 3) {
-      silverBulletStatus = "ACTIVE_LONDON";
-      silverBulletName = "London Open Silver Bullet (3-4 AM EST)";
-    } else if (nyHour === 10) {
-      silverBulletStatus = "ACTIVE_NY_AM";
-      silverBulletName = "New York AM Session Silver Bullet (10-11 AM EST - Strongest)";
-    } else if (nyHour === 14) {
-      silverBulletStatus = "ACTIVE_NY_PM";
-      silverBulletName = "New York PM Session Silver Bullet (2-3 PM EST)";
-    }
-
+    const { nyTimeStr, killZoneName, silverBulletName } = getSessionWindows();
     const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
     const ai = getGeminiClient(customKey);
 
-    let reinforcementLearningPrompt = "";
-    if (learnings && Array.isArray(learnings) && learnings.length > 0) {
-      reinforcementLearningPrompt += `\nUSER-SAVED LEARNINGS/OBSERVATIONS HISTORY ("Learn from me" database):
-- You MUST incorporate, respect, and apply these previous lessons, notes, or tips that the user has recorded whenever they relate to their query:
-${learnings.map((l: any, i: number) => `  * Lesson #${i + 1} (${l.category || "General"} - for ${l.symbol || "General"}): ${l.learnings || l}`).join("\n")}
-Acknowledge these learnings warmly to show you are aligned with their cumulative experience.
-`;
+    let reinforcementPrompt = "";
+    if (Array.isArray(learnings) && learnings.length > 0) {
+      reinforcementPrompt += `\nUSER SAVED TRADING RULES:\n${learnings
+        .slice(0, 8)
+        .map((l: any, i: number) => `- Rule #${i + 1} (${l.category || "General"} / ${l.symbol || "All"}): ${l.learnings || l}`)
+        .join("\n")}\n`;
     }
 
-    if (tradeHistory && Array.isArray(tradeHistory) && tradeHistory.length > 0) {
-      const wonTrades = tradeHistory.filter((t: any) => t.status === "WON");
-      const lostTrades = tradeHistory.filter((t: any) => t.status === "LOST");
-      const winRate = tradeHistory.length > 0 ? Math.round((wonTrades.length / tradeHistory.length) * 100) : 0;
-
-      reinforcementLearningPrompt += `\nREINFORCEMENT LEARNING FROM USER TRADE OUTCOMES (Win/Loss, PNL, reasons):
-- Total logged trades: ${tradeHistory.length}
-- Win Rate: ${winRate}% (${wonTrades.length} Wins, ${lostTrades.length} Losses)
-- Past Winning Setups (Strengthen these patterns):
-${wonTrades.slice(0, 5).map((t: any) => `  * ${t.symbol} Setup at Entry ${t.entry_price || t.entry || "N/A"}: Won ${t.pnl || ""} PNL. Notes: ${t.notes || t.description || "N/A"}`).join("\n")}
-- Past Losing Setups (Weaken/adjust these patterns to avoid repeating the same mistakes):
-${lostTrades.slice(0, 5).map((t: any) => `  * ${t.symbol} Setup at Entry ${t.entry_price || t.entry || "N/A"}: Lost ${t.pnl || ""} PNL. Notes: ${t.notes || t.description || "N/A"}`).join("\n")}
-
-- You MUST maintain a mental "win probability" estimate based on these past similar setups, adjust your recommendation to be more conservative/selective, and reference any past relevant trade outcomes in "tradeSetup.rationale" and "detailedVisualDescription".
-`;
+    if (Array.isArray(tradeHistory) && tradeHistory.length > 0) {
+      const won = tradeHistory.filter((t: any) => t.status === "WON");
+      const lost = tradeHistory.filter((t: any) => t.status === "LOST");
+      const wr = Math.round((won.length / tradeHistory.length) * 100);
+      reinforcementPrompt += `\nUSER JOURNAL STATS: ${tradeHistory.length} trades, ${wr}% win rate (${won.length}W / ${lost.length}L).\n`;
+      if (quantContext?.symbolJournalStats?.totalOnSymbol > 0) {
+        const s = quantContext.symbolJournalStats;
+        reinforcementPrompt += `SYMBOL-SPECIFIC RECORD ON ${symbol}: ${s.totalOnSymbol} trades, ${s.winRatePct}% win rate (${s.wins}W / ${s.losses}L).\n`;
+      }
     }
 
-    const systemPromptMessage = `You are an elite Synthetic Indices SMC Master Mentor, Computer Vision expert, and full-stack Next.js developer with deep knowledge of Deriv platform. Specialize in master-class analysis of Synthetic Indices and Smart Money Concepts. Specialize also in auto-annotating charts as a Vision system. Specifying precision confluences.
+    const quantBlock = quantContext
+      ? `\nEXACT LIVE MATHEMATICAL SMC TELEMETRY (COMPUTED FROM REAL LIVE OHLC CANDLES — USE THESE EXACT PRICE COORDINATES, DO NOT HALLUCINATE PRICES):\n${JSON.stringify(
+          quantContext,
+          null,
+          2
+        )}\n`
+      : "";
 
-Your task is to analyze the uploaded chart screenshots (which might contain one single chart OR a set of three multi-timeframe charts: 30-minute, 4-hour, and 1-day) of ${symbol || "Synthetic Index"} and outline an executable trading plan.
-${currentPrice ? `The exact live Deriv market price at the time of this scan is: **${currentPrice}**. Use this precise price to calculate extremely accurate Entry, Stop Loss, and Take Profit levels based on the structures you see.` : ""}
-Look closely at the candle wicks, trend direction, order blocks, vacuums, voids, FVGs, and scale markers on the charts.
+    const systemPromptMessage = `You are an elite Institutional Quantitative SMC/ICT Strategist and Computer Vision Chart Analyst covering Forex, Gold/Commodities, Global Indices, Crypto Perpetual Futures (Bybit), and Deriv Synthetic Indices.
 
-${reinforcementLearningPrompt}
+HYBRID QUANT + VISION MANDATE (CRITICAL):
+1. You have been given BOTH the live mathematical SMC engine JSON (computed from real 300-bar OHLC + real 1D/4H MTF + real Order Blocks, FVGs, PDH/PDL, Asian Range, 0.705 OTE, ATR, and Asset-Specific Microstructure) AND chart screenshot(s).
+2. Ground EVERY numerical level (entry, stopLoss, takeProfits, orderBlock, fibonacciRetracement, candleRangeTheory) strictly in the live price (${currentPrice || quantContext?.livePrice || "chart scale"}) and mathematical SMC levels provided. NEVER invent arbitrary prices.
+3. HONEST CAPITAL-PRESERVATION DISCIPLINE: If the mathematical engine shows < 3/5 modules aligned, OR Risk:Reward < 1:2.0, OR price is violating the 50% Premium/Discount rule, OR HTF (1D/4H) strongly contradicts the execution timeframe without a clean liquidity sweep + CHoCH, you MUST set "tradeSetup.type" to "WAIT" and explain exactly what price condition is missing!
+4. ANTI-STOP-LOSS HUNTING RULE: Stop Loss must sit behind the structural displacement origin + ATR volatility buffer (never tight at an obvious retail swing wick).
+5. Current New York Session Time: ${nyTimeStr}. Active Killzone: ${killZoneName}. Active Silver Bullet: ${silverBulletName}.
+${reinforcementPrompt}
+${quantBlock}
 
-CRITICAL ANALYSIS INSTRUCTIONS:
-1. ASSET-SPECIFIC INSTITUTIONAL SMC KNOWLEDGE:
-   - FOREX CURRENCY PAIRS INSTITUTIONAL PLAYBOOK & ANTI-STOP-LOSS ENGINE:
-     * THE #1 REASON SETUPS HIT STOP LOSS (ANTI-SL HUNTING MANDATE):
-       Retail traders place their Stop Loss directly on obvious swing highs, swing lows, or equal highs/lows (EQH/EQL). Institutional algorithms (banks and market makers) intentionally engineer liquidity sweeps (Judas Swing / Turtle Soup / 3-Drive Liquidity Run) that probe 3 to 10 pips past these levels before expanding toward the actual target!
-     * STRUCTURAL INVALIDATION STOP LOSS PLACEMENT:
-       Never place the Stop Loss right at the swing extreme or Order Block wick edge.
-       The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the candle that broke structure or formed the FVG) PLUS an asset-specific spread & volatility buffer:
-       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond the structural invalidation point.
-       - High volatility majors (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
-       - Cross pairs (GBP/JPY, EUR/JPY, EUR/AUD, GBP/CAD): Minimum 10 to 15 pips buffer to absorb aggressive spread widening.
-       If the required safe structural Stop Loss makes the Risk:Reward less than 1:2.5, DO NOT tighten the SL into the sweep zone; instead, calculate a deeper limit entry at OTE (0.705/0.786 Fib) inside Discount/Premium, or set tradeSetup.type to "WAIT".
-     * STRICT 50% DEALING RANGE RULE (PREMIUM VS DISCOUNT):
-       - NEVER suggest a BUY in Premium (>50% equilibrium of the dealing range). Longs MUST be taken in deep Discount (<50%), ideally at 0.618 - 0.786 Optimal Trade Entry (OTE).
-       - NEVER suggest a SELL in Discount (<50% equilibrium of the dealing range). Shorts MUST be taken in deep Premium (>50%).
-     * SESSION KILLZONES & LONDON JUDAS SWINGS:
-       - Asian Session Range (19:00–00:00 EST / 00:00–05:00 UTC): Establishes the Asian High and Asian Low liquidity boundaries.
-       - London Open Killzone (02:00–05:00 EST / 07:00–10:00 UTC): Over 70% of the time, the daily high or low is formed here. The London Judas Swing manipulates price by sweeping the Asian High or Low, traps breakout traders, mitigates an HTF Order Block, and then displaces in the true daily trend direction.
-       - New York AM Killzone (07:00–10:00 EST / 12:00–15:00 UTC): High volatility institutional order flow. Silver Bullet window (10:00–11:00 AM EST) with clean FVG rebalances.
-       - London Close / NY PM (14:00–17:00 UTC): Institutional profit taking. Stand aside from new trend continuation entries.
-     * SMT (SMART MONEY TECHNIQUE) DIVERGENCE:
-       - Track correlation cracks between positively correlated pairs (EUR/USD vs GBP/USD) or inversely correlated assets (DXY vs EUR/USD).
-       - When EUR/USD makes a Higher High but GBP/USD fails and forms a Lower High, Smart Money is distributing — the EUR/USD high is a retail trap, expect a sharp reversal downward!
-       - When EUR/USD makes a Lower Low but GBP/USD forms a Higher Low, Smart Money is accumulating — expect a sharp reversal upward!
-     * RED-FOLDER HIGH-IMPACT NEWS RISK (CPI, NFP, FOMC, Rate Decisions):
-       - Never enter within 15 minutes before or after red-folder news. News candles cause spread blowouts and dual-sided liquidity spikes. Wait for the post-news displacement candle, identify the new Fair Value Gap, and enter on the retest.
-     * IN-TRADE RISK MANAGEMENT:
-       - Minimum 1:2.5 or 1:3 Risk-to-Reward ratio required.
-       - Take 50% partial profits at TP1 (first external liquidity pool) and immediately move Stop Loss to Breakeven (+1 pip buffer) to eliminate 100% of risk.
-
-   - GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
-     * Asian Session Range Liquidity Sweeps: Asian range (00:00–06:00 GMT) establishes clean equal highs/lows. London Open (07:00–09:00 GMT / 02:00–04:00 AM EST) Judas Swing aggressively sweeps the Asian range high or low, traps retail breakout traders, then delivers price into an unmitigated 15M/1H institutional Order Block.
-     * New York Kill Zone & Macro Volatility: 08:30 AM EST (CPI, NFP, PPI) and 10:00 AM EST high-impact releases engineer aggressive displacement wicks. Never chase the initial news spike; execute on the subsequent FVG rebalance and institutional mitigation block.
-     * Institutional Round Psychological Numbers: Key reactions cluster around psychological levels ($10, $50, and $100 levels like $2,600, $2,650, $2,700). High probability limit entries occur at confluences between an Order Block and a round level.
-     * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
-     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level with $2.50 to $3.50 buffer.
-
-   - CRYPTO FUTURES & PERPETUALS (BYBIT / BINANCE: BTCUSDT.P, ETHUSDT.P, SOLUSDT.P, etc.) PLAYBOOK:
-     * Combine SMC structure with CVD (Cumulative Volume Delta) Divergences and Open Interest (OI) Flushes: e.g., price sweeps Sell-Side Liquidity (SSL) below equal lows, 50x/100x leveraged longs are liquidated causing an OI flush, followed by bullish CVD absorption and an LTF CHoCH/MSS.
-     * Account for 8-hour Funding Rates and Long/Short ratios: negative funding with rising OI inside a Discount Order Block indicates trapped aggressive shorts primed for a squeeze.
-     * CME Bitcoin Futures Gap Fills & Weekend Range Liquidity Engineering.
-
-   - DERIV SYNTHETIC INDICES KNOWLEDGE (V75, V100, BOOM 1000, CRASH 500, STEP INDEX):
-     * 24/7 algorithmically generated indices with constant volatility profiles and zero fundamental news catalysts.
-     * Adapt sensitivity for algorithmic tick generation: identify pre-spike consolidation bases on Boom 1000 / Crash 500 inside HTF OBs and ±2.5σ mean-reversion volatility bands on Volatility 75 / 100.
-
-2. 5-MODULE MULTI-FACTOR CONFLUENCE SCORING SYSTEM (0–100%):
-   A trade setup ONLY triggers a "High Probability" BUY/SELL alert when at least 3 of the following 5 modules align:
-   - Module 1 (SMC & ICT Framework): Automated detection of BOS, CHoCH, MSS across HTF (4H/1D) and LTF (15M/5M/1M); PD Arrays (Order Blocks, FVG, Mitigation/Breaker Blocks); BSL/SSL pools & Liquidity Sweeps/Judas Swings; ICT Killzones (London 02:00-05:00 EST, NY Open 07:00-10:00 EST, Silver Bullet 10:00-11:00 EST).
-   - Module 2 (Advanced Fibonacci Confluence): Dynamic Fib retracements from confirmed swing highs/lows; highlight ICT Optimal Trade Entry (OTE 0.618–0.786, with 0.705 as the institutional sweet spot); strictly filter Longs in Discount (<0.50 equilibrium) and Shorts in Premium (>0.50 equilibrium); project 1.272 (TP1), 1.618 (TP2), and 2.0 (TP3) Fibonacci Extensions.
-   - Module 3 (Institutional Candlestick & Price Action): Detect Bullish/Bearish Engulfing with volume expansion, Pin Bars/Hammer/Shooting Star sweeping liquidity, Three-Bar Reversals, Morning/Evening Stars, and Inside Bar breakouts SPECIFICALLY inside HTF POI zones (filter out standalone mid-range noise).
-   - Module 4 (Asset-Specific Quantitative Filters): CVD Divergences & OI flushes for Crypto Perpetuals; pre-spike bases & volatility bands for Synthetics; SMT correlation & Killzone weighting for Forex.
-   - Module 5 (Dynamic Risk & Execution Output): Exact Entry Zone (anchored at 0.705 OTE), Structural/ATR Stop Loss, and tiered TPs (1.272, 1.618, 2.0) with minimum 1:2.5 Risk-to-Reward ratio.
-
-You MUST respond strictly with a valid JSON object matching this schema. Do not add any extra markdown wrapping (\`\`\`json):
-
+Respond strictly with a single valid raw JSON object (no markdown fences) matching this exact schema:
 {
-  "imageQuality": {
-    "status": "passed" | "failed",
-    "details": "Technical review of screenshot clarity"
-  },
+  "imageQuality": { "status": "passed" | "failed", "details": "string" },
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "marketStructure": "Structural description (e.g. Bullish BOS, Liquidity swept, or Bearish CHoCH)",
-  "confluenceScore": 4.5,
-  "confluenceScorePct": 88,
+  "marketStructure": "string",
+  "confluenceScore": 4.2,
+  "confluenceScorePct": 82,
   "alignedModulesCount": 4,
-  "confluenceFormula": "HTF Order Block + 0.705 OTE + SSL Sweep + POI Engulfing = 88% Confluence",
+  "confluenceFormula": "string",
   "antiStopLossShield": {
-    "structuralInvalidationPrice": 1.0820,
-    "bufferPipsApplied": 5.0,
-    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + ATR buffer rather than obvious retail swing wick to avoid stop hunts",
+    "structuralInvalidationPrice": 0,
+    "bufferPipsApplied": 0,
+    "protectionRationale": "string",
     "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
   },
-  "killZone": {
-    "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE",
-    "windowName": "Window name",
-    "details": "Kill Zone analysis for ${killZoneName}"
-  },
-  "silverBullet": {
-    "status": "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE",
-    "windowName": "Window name",
-    "details": "Silver Bullet analysis for ${silverBulletName}"
-  },
-  "candleRangeTheory": {
-    "rangeHigh": 1620.00,
-    "rangeLow": 1540.00,
-    "sweepType": "HIGH_SWEPT" | "LOW_SWEPT" | "NONE",
-    "deliveryDirection": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "description": "Candle Range Theory explanation"
-  },
-  "judasSwing": {
-    "detected": true,
-    "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "triggerLevel": 1622.50,
-    "description": "Judas Swing details"
-  },
-  "powerOf3": {
-    "detected": true,
-    "accumulationRange": "1545.00 - 1558.00",
-    "manipulationLevel": 1538.50,
-    "distributionTarget": 1595.00,
-    "description": "Power of 3 description"
-  },
-  "multiTimeframe": {
-    "isMultiTimeframe": true,
-    "htfBias1D": "Macro bias on 1D",
-    "intermediateStructure4H": "Structure on 4H",
-    "entryPrecision30M": "Micro precision on 30M",
-    "confirmationMessage": "Confirmation verification"
-  },
-  "suggestedRisk": "Suggested risk allocation",
-  "doActions": ["Action 1", "Action 2"],
-  "dontActions": ["Warning 1", "Warning 2"],
-  "detailedVisualDescription": "Technical summary of detected chart elements",
-  "orderBlock": {
-    "priceRange": "Price boundary",
-    "type": "Type name",
-    "rationale": "SMC rationale"
-  },
-  "supplyDemandZones": {
-    "supply": "Supply area",
-    "demand": "Demand area",
-    "activeZone": "Active zone"
-  },
-  "liquidityVoid": {
-    "priceRange": "Void boundaries",
-    "description": "Imbalance details"
-  },
-  "vacuumBlock": {
-    "priceRange": "Vacuum boundaries",
-    "description": "Spike details"
-  },
-  "candlestickPatterns": {
-    "patternName": "Pattern name inside HTF POI",
-    "context": "Context description"
-  },
-  "fibonacciRetracement": {
-    "level_50": 1550.00,
-    "level_618": 1545.00,
-    "level_705": 1541.50,
-    "level_786": 1538.00,
-    "ext_1272": 1590.00,
-    "ext_1618": 1610.00,
-    "ext_2000": 1635.00,
-    "description": "Fibonacci OTE (0.618-0.786, 0.705 sweet spot) and Premium/Discount confluence description"
-  },
-  "tradeSetup": {
-    "type": "BUY" | "SELL" | "WAIT",
-    "entry": 1541.50,
-    "stopLoss": 1528.00,
-    "takeProfits": [1590.00, 1610.00, 1635.00],
-    "riskRewardRatio": "1:3.2",
-    "rationale": "Rationale"
-  },
-  "educationalInsight": "Educational lesson"
-};`;
+  "killZone": { "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE", "windowName": "string", "details": "string" },
+  "silverBullet": { "status": "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE", "windowName": "string", "details": "string" },
+  "candleRangeTheory": { "rangeHigh": 0, "rangeLow": 0, "sweepType": "HIGH_SWEPT" | "LOW_SWEPT" | "NONE", "deliveryDirection": "BULLISH" | "BEARISH" | "NEUTRAL", "description": "string" },
+  "judasSwing": { "detected": true, "direction": "BULLISH" | "BEARISH" | "NEUTRAL", "triggerLevel": 0, "description": "string" },
+  "powerOf3": { "detected": true, "accumulationRange": "string", "manipulationLevel": 0, "distributionTarget": 0, "description": "string" },
+  "multiTimeframe": { "isMultiTimeframe": true, "htfBias1D": "string", "intermediateStructure4H": "string", "entryPrecision30M": "string", "confirmationMessage": "string" },
+  "suggestedRisk": "string",
+  "doActions": ["string"],
+  "dontActions": ["string"],
+  "detailedVisualDescription": "string",
+  "orderBlock": { "priceRange": "string", "type": "string", "rationale": "string" },
+  "supplyDemandZones": { "supply": "string", "demand": "string", "activeZone": "string" },
+  "liquidityVoid": { "priceRange": "string", "description": "string" },
+  "vacuumBlock": { "priceRange": "string", "description": "string" },
+  "candlestickPatterns": { "patternName": "string", "context": "string" },
+  "fibonacciRetracement": { "level_50": 0, "level_618": 0, "level_705": 0, "level_786": 0, "ext_1272": 0, "ext_1618": 0, "ext_2000": 0, "description": "string" },
+  "tradeSetup": { "type": "BUY" | "SELL" | "WAIT", "entry": 0, "stopLoss": 0, "takeProfits": [0, 0, 0], "riskRewardRatio": "1:2.8", "rationale": "string" },
+  "educationalInsight": "string"
+}`;
 
     const textPart = {
-      text: `Analyze the provided chart screenshot(s) for ${symbol || "Synthetic Index"} under the ${timeframe || "30M"} timeframe according to Smart Money Concepts (SMC), Supply and Demand, and Fibonacci retracement mechanics. Estimate logical numerical index parameters for the entry, stop-loss, and take-profit targets based on the charts' visible numbers/ranges. Only offer a BUY/SELL signal if we have 4+ confluences, otherwise set to WAITING.`,
+      text: `Perform a Hybrid Quantitative + Vision SMC evaluation for ${symbol || "Market Asset"} (${timeframe || "H1"}) at live price ${currentPrice || quantContext?.livePrice || "visible on chart"}. Cross-check the visual candle structure in the chart image(s) against the exact mathematical SMC telemetry JSON. Only output BUY or SELL if >= 3 of 5 modules align and R:R >= 1:2.0; otherwise output WAIT.`,
     };
 
-    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
-      model: "gemini-3.8-flash",
+    const { response, modelUsed } = await generateGeminiContent(ai, "gemini-4-hydrogen", {
       contents: {
         parts: [...contentParts, textPart],
       },
       config: {
         systemInstruction: systemPromptMessage,
         responseMimeType: "application/json",
-        temperature: 0.15,
       },
     });
 
     const responseText = response.text;
     if (!responseText) {
-      throw new Error("No response output returned from the Gemini modeling endpoint.");
+      throw new Error("Empty response returned from Gemini endpoint.");
     }
 
-    let parsedResult;
+    let parsedResult: any;
     try {
       parsedResult = JSON.parse(responseText.trim());
     } catch {
@@ -398,140 +530,25 @@ You MUST respond strictly with a valid JSON object matching this schema. Do not 
       parsedResult = JSON.parse(cleaned);
     }
 
+    parsedResult.engineMode = "HYBRID_AI_VISION";
+    parsedResult.modelUsed = modelUsed;
+
     res.status(200).json({
       success: true,
       data: parsedResult,
     });
   } catch (error: any) {
-    console.warn("Gemini Vision API notice, activating automated 5-Module SMC Confluence Engine:", error?.message);
-    const { symbol, timeframe, currentPrice } = req.body || {};
-    const fallbackData = generateFallbackSMCAnalysis(symbol || "Market Asset", timeframe || "H1", currentPrice);
+    console.warn("[analyze-chart] Falling back to deterministic mathematical quant report:", error?.message);
+    const fallbackData = buildDeterministicQuantReport(
+      symbol || "Market Asset",
+      timeframe || "H1",
+      currentPrice,
+      quantContext,
+      `Gemini Vision unavailable (${error?.message || "timeout"}); report synthesized deterministically from live OHLC SMC mathematics.`
+    );
     res.status(200).json({
       success: true,
       data: fallbackData,
     });
   }
-}
-
-function generateFallbackSMCAnalysis(symbol: string, timeframe: string, currentPrice?: number) {
-  const basePrice = currentPrice && currentPrice > 0 ? currentPrice : 1.0850;
-  const isHighValue = basePrice > 1000;
-  const isMediumValue = basePrice > 50 && basePrice <= 1000;
-  const step = isHighValue ? basePrice * 0.015 : isMediumValue ? basePrice * 0.02 : basePrice * 0.0045;
-
-  const entry = parseFloat((basePrice - step * 0.35).toFixed(basePrice < 5 ? 4 : 2));
-  const stopLoss = parseFloat((entry - step * 1.1).toFixed(basePrice < 5 ? 4 : 2));
-  const tp1 = parseFloat((entry + step * 1.8).toFixed(basePrice < 5 ? 4 : 2));
-  const tp2 = parseFloat((entry + step * 3.2).toFixed(basePrice < 5 ? 4 : 2));
-  const tp3 = parseFloat((entry + step * 4.5).toFixed(basePrice < 5 ? 4 : 2));
-  const equilibrium = parseFloat(((tp2 + stopLoss) / 2).toFixed(basePrice < 5 ? 4 : 2));
-
-  return {
-    imageQuality: {
-      status: "passed",
-      details: "High-definition structural candle matrix analyzed. Real-time liquidity mapped.",
-    },
-    bias: "BULLISH",
-    marketStructure: "Confirmed Bullish Market Structure Shift (MSS) with displacement above Asian session range.",
-    confluenceScore: 4.8,
-    confluenceScorePct: 92,
-    alignedModulesCount: 4,
-    confluenceFormula: "HTF Order Block + 0.705 OTE + SSL Liquidity Sweep + FVG Mitigation = 92% Confluence",
-    antiStopLossShield: {
-      structuralInvalidationPrice: stopLoss,
-      bufferPipsApplied: 6.5,
-      protectionRationale: "Stop Loss placed strictly behind the structural displacement origin candle + volatility buffer rather than obvious retail swing wicks to prevent Judas stop hunts.",
-      dealingRangePosition: "DISCOUNT_OTE",
-    },
-    killZone: {
-      status: "ACTIVE_LONDON",
-      windowName: "London Open Killzone (02:00-05:00 EST)",
-      details: "London Judas swing liquidity sweep below Asian low completed. True institutional expansion active.",
-    },
-    silverBullet: {
-      status: "ACTIVE_NY_AM",
-      windowName: "NY AM Silver Bullet (10:00-11:00 EST)",
-      details: "Institutional Fair Value Gap rebalance into unmitigated Demand POI.",
-    },
-    candleRangeTheory: {
-      rangeHigh: tp2,
-      rangeLow: stopLoss,
-      sweepType: "LOW_SWEPT",
-      deliveryDirection: "BULLISH",
-      description: "External sell-side liquidity swept with immediate bullish displacement candle.",
-    },
-    judasSwing: {
-      detected: true,
-      direction: "BULLISH",
-      triggerLevel: entry,
-      description: "False downward probe into institutional Demand zone rejected with aggressive orderflow absorption.",
-    },
-    powerOf3: {
-      detected: true,
-      accumulationRange: `${stopLoss} - ${entry}`,
-      manipulationLevel: stopLoss,
-      distributionTarget: tp2,
-      description: "AMD (Accumulation, Manipulation, Distribution) phase active. Price currently in expansion leg.",
-    },
-    multiTimeframe: {
-      isMultiTimeframe: true,
-      htfBias1D: "BULLISH",
-      intermediateStructure4H: "Unmitigated Bullish Order Block mitigation",
-      entryPrecision30M: "Clean 0.705 OTE mitigation inside 15M/30M Fair Value Gap",
-      confirmationMessage: "High-probability institutional confluence verified across all timeframes.",
-    },
-    suggestedRisk: "1.0% to 1.5% maximum account risk per position. Respect mechanical 1:3+ R:R.",
-    doActions: [
-      "Enter with limit order at the 0.705 OTE Discount entry zone",
-      "Take 50% partial profits at TP1 and move Stop Loss to Breakeven (+1 pip buffer)",
-      "Trail remaining runner to TP2 and TP3",
-    ],
-    dontActions: [
-      "Do not enter with market orders during wide spread expansions",
-      "Do not widen Stop Loss if initial invalidation level is breached",
-      "Do not take long positions in Premium (>50% equilibrium)",
-    ],
-    detailedVisualDescription: `Institutional order flow scan for ${symbol || "Instrument"}. Price swept sell-side liquidity, cleared retail stop clusters, and printed strong displacement leaving unmitigated Fair Value Gaps.`,
-    orderBlock: {
-      priceRange: `${entry} - ${stopLoss}`,
-      type: "Bullish Demand Order Block",
-      rationale: "Last bearish down-close candle prior to aggressive structural market displacement.",
-    },
-    supplyDemandZones: {
-      supply: `${tp2} - ${tp3}`,
-      demand: `${stopLoss} - ${entry}`,
-      activeZone: "Demand Mitigation Zone",
-    },
-    liquidityVoid: {
-      priceRange: `${entry} - ${tp1}`,
-      description: "Imbalance gap awaiting institutional rebalance during London/NY expansion.",
-    },
-    vacuumBlock: {
-      priceRange: `${stopLoss} - ${entry}`,
-      description: "Rapid price delivery with zero retail order matching.",
-    },
-    candlestickPatterns: {
-      patternName: "Bullish Engulfing Displacement Candle",
-      context: "Formed directly at HTF point of interest following sell-side liquidity sweep.",
-    },
-    fibonacciRetracement: {
-      level_50: equilibrium,
-      level_618: parseFloat((entry + (equilibrium - entry) * 0.4).toFixed(basePrice < 5 ? 4 : 2)),
-      level_705: entry,
-      level_786: parseFloat((entry - (entry - stopLoss) * 0.3).toFixed(basePrice < 5 ? 4 : 2)),
-      ext_1272: tp1,
-      ext_1618: tp2,
-      ext_2000: tp3,
-      description: "Optimal Trade Entry (0.705 sweet spot) aligned with unmitigated institutional Order Block in deep Discount (<50%).",
-    },
-    tradeSetup: {
-      type: "BUY",
-      entry: entry,
-      stopLoss: stopLoss,
-      takeProfits: [tp1, tp2, tp3],
-      riskRewardRatio: "1:3.4",
-      rationale: "Precision execution at 0.705 OTE Discount zone. Invalidation SL placed safely behind structural displacement origin.",
-    },
-    educationalInsight: "Institutional algorithms always engineer liquidity sweeps (Judas Swings) prior to true expansions. By waiting for the sweep and entering at the 0.705 OTE inside an unmitigated Order Block, you align with smart money flows instead of retail stop traps.",
-  };
 }

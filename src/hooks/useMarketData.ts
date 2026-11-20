@@ -5,12 +5,25 @@ import {
   StandardCandle,
   FuturesTelemetry,
   FeedTelemetry,
+  MultiTimeframeCandles,
+  SmtReferenceData,
 } from "../services/MarketDataService";
+import { useSharedMarketDataContext } from "../context/MarketDataContext";
 
 export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
+  const shared = useSharedMarketDataContext();
+  const isSharedMatch =
+    shared !== null &&
+    shared.symbol.ticker === symbol.ticker &&
+    shared.symbol.marketType === symbol.marketType &&
+    shared.timeframe === timeframe;
+
+  // Fallback local state only used when hook is mounted outside MarketDataProvider
   const [candles, setCandles] = useState<StandardCandle[]>([]);
   const [latestCandle, setLatestCandle] = useState<StandardCandle | null>(null);
   const [futuresTelemetry, setFuturesTelemetry] = useState<FuturesTelemetry | null>(null);
+  const [mtfCandles, setMtfCandles] = useState<MultiTimeframeCandles | null>(null);
+  const [smtReference, setSmtReference] = useState<SmtReferenceData | null>(null);
   const [telemetry, setTelemetry] = useState<FeedTelemetry>({
     provider: symbol.marketType === "CRYPTO_PERP" ? "Bybit V5 Linear WS" : "Deriv Public WS",
     status: "CONNECTING",
@@ -22,11 +35,11 @@ export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
     futuresTelemetry: null,
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  // Keep ref to avoid stale closures in callbacks
   const candlesRef = useRef<StandardCandle[]>([]);
 
   useEffect(() => {
+    if (isSharedMatch) return;
+
     setIsLoading(true);
     candlesRef.current = [];
     setCandles([]);
@@ -44,13 +57,11 @@ export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
       },
       onCandleUpdate: (newCandle) => {
         setLatestCandle(newCandle);
-
         setCandles((prev) => {
           if (prev.length === 0) {
             candlesRef.current = [newCandle];
             return [newCandle];
           }
-
           const copy = [...prev];
           const lastIdx = copy.length - 1;
           const last = copy[lastIdx];
@@ -60,9 +71,7 @@ export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
           } else if (newCandle.timestamp > last.timestamp) {
             copy[lastIdx] = { ...last, isClosed: true };
             copy.push(newCandle);
-            if (copy.length > 350) {
-              copy.shift();
-            }
+            if (copy.length > 350) copy.shift();
           }
           candlesRef.current = copy;
           return copy;
@@ -73,16 +82,37 @@ export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
       },
       onTelemetryChange: (feedTelemetry) => {
         setTelemetry(feedTelemetry);
-        if (feedTelemetry.status === "CONNECTED") {
+        if (feedTelemetry.status === "CONNECTED" || feedTelemetry.status === "ERROR") {
           setIsLoading(false);
         }
       },
     });
 
+    Promise.all([
+      marketDataService.fetchMultiTimeframeCandles(symbol).catch(() => null),
+      marketDataService.fetchSmtReferenceData(symbol, timeframe).catch(() => null),
+    ]).then(([mtf, smt]) => {
+      if (mtf) setMtfCandles(mtf);
+      if (smt) setSmtReference(smt);
+    });
+
     return () => {
       unsubscribe();
     };
-  }, [symbol.ticker, symbol.marketType, timeframe]);
+  }, [isSharedMatch, symbol.ticker, symbol.marketType, timeframe]);
+
+  if (isSharedMatch && shared) {
+    return {
+      candles: shared.candles,
+      latestCandle: shared.latestCandle,
+      futuresTelemetry: shared.futuresTelemetry,
+      telemetry: shared.telemetry,
+      isLoading: shared.isLoading,
+      mtfCandles: shared.mtfCandles,
+      isMtfLoading: shared.isMtfLoading,
+      smtReference: shared.smtReference,
+    };
+  }
 
   return {
     candles,
@@ -90,5 +120,8 @@ export function useMarketData(symbol: SyntheticSymbol, timeframe: string) {
     futuresTelemetry,
     telemetry,
     isLoading,
+    mtfCandles,
+    isMtfLoading: false,
+    smtReference,
   };
 }

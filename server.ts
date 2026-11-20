@@ -1,15 +1,17 @@
 import express from "express";
 import path from "path";
-import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import { syncProjectToGitHub } from "./scripts/github-sync";
+import analyzeChartHandler from "./api/analyze-chart";
+import chatBotHandler from "./api/chat-bot";
+import generateEducationalImageHandler from "./api/generate-educational-image";
 
 dotenv.config();
 
 export const app = express();
 const PORT = 3000;
 
-// Set body parser limits to support base64 screenshots of chart images
+// Body parser limits to support base64 chart screenshots + quantContext telemetry
 app.use(express.json({ limit: "25mb" }));
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
@@ -25,7 +27,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Anti-caching middleware: ensure Vercel CDN and browsers never cache dynamic API responses
+// Anti-caching middleware
 app.use((req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
   res.setHeader("Pragma", "no-cache");
@@ -34,805 +36,28 @@ app.use((req, res, next) => {
   next();
 });
 
-// Lazy initializer for the Google Gen AI client following best practices
-let aiClient: GoogleGenAI | null = null;
-function getGeminiClient(customKey?: string): GoogleGenAI {
-  const rawKey =
-    customKey ||
-    process.env.GEMINI_API_KEY ||
-    process.env.VITE_GEMINI_API_KEY;
-  const key = rawKey?.trim().replace(/[\r\n\s]+/g, "");
-  if (!key) {
-    throw new Error(
-      "GEMINI_API_KEY environment variable is not configured."
-    );
-  }
-  return new GoogleGenAI({
-    apiKey: key,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
+// ----------------------------------------------------
+// API ENDPOINTS (Single Source of Truth shared with Vercel /api/* handlers)
+// ----------------------------------------------------
+
+app.get(["/api/health", "/health"], (_req, res) => {
+  res.json({
+    status: "ok",
+    engine: "QuantSMC Hybrid Quant + Gemini 4 Hydrogen",
+    time: new Date().toISOString(),
   });
-}
-
-// Robust fallback & retry wrapper to resolve temporary Gemini 503 "High Demand" model overloading
-async function generateGeminiContent(
-  ai: GoogleGenAI,
-  primaryModel: string,
-  params: any
-): Promise<any> {
-  const modelsToTry = [primaryModel];
-  
-  if (primaryModel === "gemini-3.8-flash") {
-    modelsToTry.push("gemini-3.6-flash", "gemini-3.1-flash-lite");
-  } else if (primaryModel === "gemini-3.1-flash-lite") {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash");
-  } else {
-    modelsToTry.push("gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite");
-  }
-
-  // Deduplicate model list to maintain clean sequential order
-  const uniqueModels = Array.from(new Set(modelsToTry));
-  const delayHelper = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-  let lastError: any = null;
-
-  for (const modelName of uniqueModels) {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        console.log(`[Gemini Fallback System] Routing request to ${modelName} (Attempt ${attempt}/3)...`);
-        const requestParams = {
-          ...params,
-          model: modelName,
-        };
-        const response = await ai.models.generateContent(requestParams);
-        return response;
-      } catch (err: any) {
-        lastError = err;
-        const errMsg = String(err.message || err.status || "").toLowerCase();
-        const responseBody = err.response ? String(JSON.stringify(err.response)) : "";
-        const combinedErrorString = `${errMsg} ${responseBody}`.toLowerCase();
-        
-        // Critical key or configuration issues are fatal. Everything else (spikes, high demand, 503, ratelimits, server overloads) is transient and should trigger fallback.
-        const isFatal = 
-          combinedErrorString.includes("api_key_invalid") || 
-          combinedErrorString.includes("api key not valid") || 
-          combinedErrorString.includes("invalid key") ||
-          combinedErrorString.includes("unauthorized") ||
-          combinedErrorString.includes("bad credentials") ||
-          err.status === 400 || err.status === 401 || err.status === 403;
-
-        const isTransientError = !isFatal;
-
-        console.warn(
-          `[Gemini Fallback System] Model ${modelName} (Attempt ${attempt}/3) returned error:`, 
-          err.message || err
-        );
-
-        if (isTransientError && attempt < 3) {
-          const waitTime = attempt * 1000; // Step wait: 1s, 2s
-          console.log(`[Gemini Fallback System] Non-fatal issue detected. Retrying model ${modelName} in ${waitTime}ms...`);
-          await delayHelper(waitTime);
-        } else {
-          // If it's a non-transient error or we've run out of attempts on this model, break the inner loop to try the next model
-          break;
-        }
-      }
-    }
-  }
-
-  // If we exhausted all fallback options, propagate the final error
-  throw lastError;
-}
-
-// ----------------------------------------------------
-// API ENDPOINTS
-// ----------------------------------------------------
-
-// Health Check API
-app.get(["/api/health", "/health"], (req, res) => {
-  res.json({ status: "ok", time: new Date().toISOString() });
 });
 
-// Chart Analysis endpoint
-app.post(["/api/analyze-chart", "/analyze-chart"], async (req: express.Request, res: express.Response): Promise<void> => {
-  try {
-    const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice } = req.body;
-
-    if (!image && (!images || !Array.isArray(images) || images.length === 0)) {
-      const fallbackData = generateFallbackSMCAnalysis(symbol || "Market Asset", timeframe || "H1", currentPrice);
-      res.json({
-        success: true,
-        data: fallbackData,
-      });
-      return;
-    }
-
-    // Convert all inputs to Gemini parts
-    const contentParts: any[] = [];
-
-    if (images && Array.isArray(images) && images.length > 0) {
-      // Multiple images provided for top-down multi-timeframe analysis
-      for (const img of images) {
-        if (!img) continue;
-        let base64Data = img.replace(/\s+/g, '');
-        let mimeType = "image/png";
-        if (img.startsWith("data:")) {
-          const parts = img.split(";base64,");
-          if (parts.length === 2) {
-            mimeType = parts[0].replace("data:", "");
-            base64Data = parts[1].replace(/\s+/g, '');
-          }
-        }
-        contentParts.push({
-          inlineData: {
-            mimeType: mimeType,
-            data: base64Data,
-          }
-        });
-      }
-    } else if (image) {
-      // Standard single-image fallback
-      let base64Data = image.replace(/\s+/g, '');
-      let mimeType = "image/png";
-      if (image.startsWith("data:")) {
-        const parts = image.split(";base64,");
-        if (parts.length === 2) {
-          mimeType = parts[0].replace("data:", "");
-          base64Data = parts[1].replace(/\s+/g, '');
-        }
-      }
-      contentParts.push({
-        inlineData: {
-          mimeType: mimeType,
-          data: base64Data,
-        }
-      });
-    }
-
-    // Calculate current New York time (EST/EDT) for the time-based Silver Bullet Strategy
-    const nyTimeStr = new Date().toLocaleString("en-US", { timeZone: "America/New_York" });
-    const nyDate = new Date(nyTimeStr);
-    const nyHour = nyDate.getHours();
-    const nyMin = nyDate.getMinutes();
-    const nyDecimal = nyHour + (nyMin / 60);
-    
-    let killZoneStatus: "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-    let killZoneName = "Inactive";
-    if (nyDecimal >= 2.0 && nyDecimal <= 5.0) {
-      killZoneStatus = "ACTIVE_LONDON";
-      killZoneName = "London Kill Zone (2:00-5:00 AM EST / 07:00-10:00 GMT)";
-    } else if (nyDecimal >= 9.5 && nyDecimal <= 12.0) {
-      killZoneStatus = "ACTIVE_NY";
-      killZoneName = "New York AM Kill Zone (9:30 AM-12:00 PM EST / 14:30-17:00 GMT - Strongest)";
-    } else if (nyDecimal >= 15.0 && nyDecimal <= 17.0) {
-      killZoneStatus = "ACTIVE_NY_PM";
-      killZoneName = "London Close / NY PM Kill Zone (3:00-5:00 PM EST)";
-    }
-    
-    let silverBulletStatus: "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-    let silverBulletName = "Inactive";
-    if (nyHour === 3) {
-      silverBulletStatus = "ACTIVE_LONDON";
-      silverBulletName = "London Open Silver Bullet (3-4 AM EST)";
-    } else if (nyHour === 10) {
-      silverBulletStatus = "ACTIVE_NY_AM";
-      silverBulletName = "New York AM Session Silver Bullet (10-11 AM EST - Strongest)";
-    } else if (nyHour === 14) {
-      silverBulletStatus = "ACTIVE_NY_PM";
-      silverBulletName = "New York PM Session Silver Bullet (2-3 PM EST)";
-    }
-
-    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
-    const ai = getGeminiClient(customKey);
-
-    let reinforcementLearningPrompt = "";
-    if (learnings && Array.isArray(learnings) && learnings.length > 0) {
-      reinforcementLearningPrompt += `\nUSER-SAVED LEARNINGS/OBSERVATIONS HISTORY ("Learn from me" database):
-- You MUST incorporate, respect, and apply these previous lessons, notes, or tips that the user has recorded whenever they relate to their query:
-${learnings.map((l: any, i: number) => `  * Lesson #${i + 1} (${l.category || 'General'} - for ${l.symbol || 'General'}): ${l.learnings || l}`).join("\n")}
-Acknowledge these learnings warmly to show you are aligned with their cumulative experience.
-`;
-    }
-    
-    if (tradeHistory && Array.isArray(tradeHistory) && tradeHistory.length > 0) {
-      const wonTrades = tradeHistory.filter((t: any) => t.status === "WON");
-      const lostTrades = tradeHistory.filter((t: any) => t.status === "LOST");
-      const winRate = tradeHistory.length > 0 ? Math.round((wonTrades.length / tradeHistory.length) * 100) : 0;
-      
-      reinforcementLearningPrompt += `\nREINFORCEMENT LEARNING FROM USER TRADE OUTCOMES (Win/Loss, PNL, reasons):
-- Total logged trades: ${tradeHistory.length}
-- Win Rate: ${winRate}% (${wonTrades.length} Wins, ${lostTrades.length} Losses)
-- Past Winning Setups (Strengthen these patterns):
-${wonTrades.slice(0, 5).map((t: any, i: number) => `  * ${t.symbol} Setup at Entry ${t.entry_price || t.entry || 'N/A'}: Won ${t.pnl || ''} PNL. Notes: ${t.notes || t.description || 'N/A'}`).join("\n")}
-- Past Losing Setups (Weaken/adjust these patterns to avoid repeating the same mistakes):
-${lostTrades.slice(0, 5).map((t: any, i: number) => `  * ${t.symbol} Setup at Entry ${t.entry_price || t.entry || 'N/A'}: Lost ${t.pnl || ''} PNL. Notes: ${t.notes || t.description || 'N/A'}`).join("\n")}
-
-- You MUST maintain a mental "win probability" estimate based on these past similar setups, adjust your recommendation to be more conservative/selective, and reference any past relevant trade outcomes (e.g. "Similar to your previous winning setup on ${symbol} near entry...", or "Adjusting our Entry lower to avoid the previous loss scenario on ${symbol}...") in "tradeSetup.rationale" and "detailedVisualDescription".
-`;
-    }
-
-    const systemPromptMessage = `You are an elite Synthetic Indices SMC Master Mentor, Computer Vision expert, and full-stack Next.js developer with deep knowledge of Deriv platform. Specialize in master-class analysis of Synthetic Indices and Smart Money Concepts. Specialize also in auto-annotating charts as a Vision system. Specifying precision confluences.
- 
-Your task is to analyze the uploaded chart screenshots (which might contain one single chart OR a set of three multi-timeframe charts: 30-minute, 4-hour, and 1-day) of ${symbol || 'Synthetic Index'} and outline an executable trading plan.
-${currentPrice ? `The exact live Deriv market price at the time of this scan is: **${currentPrice}**. Use this precise price to calculate extremely accurate Entry, Stop Loss, and Take Profit levels based on the structures you see.` : ''}
-Look closely at the candle wicks, trend direction, order blocks, vacuums, voids, FVGs, and scale markers on the charts.
-
-${reinforcementLearningPrompt}
- 
-CRITICAL ANALYSIS INSTRUCTIONS:
-1. ASSET-SPECIFIC INSTITUTIONAL SMC KNOWLEDGE:
-   - FOREX CURRENCY PAIRS INSTITUTIONAL PLAYBOOK & ANTI-STOP-LOSS ENGINE:
-     * THE #1 REASON SETUPS HIT STOP LOSS (ANTI-SL HUNTING MANDATE):
-       Retail traders place their Stop Loss directly on obvious swing highs, swing lows, or equal highs/lows (EQH/EQL). Institutional algorithms (banks and market makers) intentionally engineer liquidity sweeps (Judas Swing / Turtle Soup / 3-Drive Liquidity Run) that probe 3 to 10 pips past these levels before expanding toward the actual target!
-     * STRUCTURAL INVALIDATION STOP LOSS PLACEMENT:
-       Never place the Stop Loss right at the swing extreme or Order Block wick edge.
-       The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the candle that broke structure or formed the FVG) PLUS an asset-specific spread & volatility buffer:
-       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond the structural invalidation point.
-       - High volatility majors (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
-       - Cross pairs (GBP/JPY, EUR/JPY, EUR/AUD, GBP/CAD): Minimum 10 to 15 pips buffer to absorb aggressive spread widening.
-       If the required safe structural Stop Loss makes the Risk:Reward less than 1:2.5, DO NOT tighten the SL into the sweep zone; instead, calculate a deeper limit entry at OTE (0.705/0.786 Fib) inside Discount/Premium, or set tradeSetup.type to "WAIT".
-     * STRICT 50% DEALING RANGE RULE (PREMIUM VS DISCOUNT):
-       - NEVER suggest a BUY in Premium (>50% equilibrium of the dealing range). Longs MUST be taken in deep Discount (<50%), ideally at 0.618 - 0.786 Optimal Trade Entry (OTE).
-       - NEVER suggest a SELL in Discount (<50% equilibrium of the dealing range). Shorts MUST be taken in deep Premium (>50%).
-     * SESSION KILLZONES & LONDON JUDAS SWINGS:
-       - Asian Session Range (19:00–00:00 EST / 00:00–05:00 UTC): Establishes the Asian High and Asian Low liquidity boundaries.
-       - London Open Killzone (02:00–05:00 EST / 07:00–10:00 UTC): Over 70% of the time, the daily high or low is formed here. The London Judas Swing manipulates price by sweeping the Asian High or Low, traps breakout traders, mitigates an HTF Order Block, and then displaces in the true daily trend direction.
-       - New York AM Killzone (07:00–10:00 EST / 12:00–15:00 UTC): High volatility institutional order flow. Silver Bullet window (10:00–11:00 AM EST) with clean FVG rebalances.
-       - London Close / NY PM (14:00–17:00 UTC): Institutional profit taking. Stand aside from new trend continuation entries.
-     * SMT (SMART MONEY TECHNIQUE) DIVERGENCE:
-       - Track correlation cracks between positively correlated pairs (EUR/USD vs GBP/USD) or inversely correlated assets (DXY vs EUR/USD).
-       - When EUR/USD makes a Higher High but GBP/USD fails and forms a Lower High, Smart Money is distributing — the EUR/USD high is a retail trap, expect a sharp reversal downward!
-       - When EUR/USD makes a Lower Low but GBP/USD forms a Higher Low, Smart Money is accumulating — expect a sharp reversal upward!
-     * RED-FOLDER HIGH-IMPACT NEWS RISK (CPI, NFP, FOMC, Rate Decisions):
-       - Never enter within 15 minutes before or after red-folder news. News candles cause spread blowouts and dual-sided liquidity spikes. Wait for the post-news displacement candle, identify the new Fair Value Gap, and enter on the retest.
-     * IN-TRADE RISK MANAGEMENT:
-       - Minimum 1:2.5 or 1:3 Risk-to-Reward ratio required.
-       - Take 50% partial profits at TP1 (first external liquidity pool) and immediately move Stop Loss to Breakeven (+1 pip buffer) to eliminate 100% of risk.
-
-   - GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
-     * Asian Session Range Liquidity Sweeps: Asian range (00:00–06:00 GMT) establishes clean equal highs/lows. London Open (07:00–09:00 GMT / 02:00–04:00 AM EST) Judas Swing aggressively sweeps the Asian range high or low, traps retail breakout traders, then delivers price into an unmitigated 15M/1H institutional Order Block.
-     * New York Kill Zone & Macro Volatility: 08:30 AM EST (CPI, NFP, PPI) and 10:00 AM EST high-impact releases engineer aggressive displacement wicks. Never chase the initial news spike; execute on the subsequent FVG rebalance and institutional mitigation block.
-     * Institutional Round Psychological Numbers: Key reactions cluster around psychological levels ($10, $50, and $100 levels like $2,600, $2,650, $2,700). High probability limit entries occur at confluences between an Order Block and a round level.
-     * Silver Bullet Windows: London Silver Bullet (03:00–04:00 AM EST) and NY AM Silver Bullet (10:00–11:00 AM EST) targeting 5M/15M liquidity voids.
-     * Invalidation: Place Stop Loss strictly beyond the Order Block wick invalidation level with $2.50 to $3.50 buffer.
-
-   - CRYPTO FUTURES & PERPETUALS (BYBIT / BINANCE: BTCUSDT.P, ETHUSDT.P, SOLUSDT.P, etc.) PLAYBOOK:
-     * Combine SMC structure with CVD (Cumulative Volume Delta) Divergences and Open Interest (OI) Flushes: e.g., price sweeps Sell-Side Liquidity (SSL) below equal lows, 50x/100x leveraged longs are liquidated causing an OI flush, followed by bullish CVD absorption and an LTF CHoCH/MSS.
-     * Account for 8-hour Funding Rates and Long/Short ratios: negative funding with rising OI inside a Discount Order Block indicates trapped aggressive shorts primed for a squeeze.
-     * CME Bitcoin Futures Gap Fills & Weekend Range Liquidity Engineering.
-
-   - DERIV SYNTHETIC INDICES KNOWLEDGE (V75, V100, BOOM 1000, CRASH 500, STEP INDEX):
-     * 24/7 algorithmically generated indices with constant volatility profiles and zero fundamental news catalysts.
-     * Adapt sensitivity for algorithmic tick generation: identify pre-spike consolidation bases on Boom 1000 / Crash 500 inside HTF OBs and ±2.5σ mean-reversion volatility bands on Volatility 75 / 100.
-
-2. 5-MODULE MULTI-FACTOR CONFLUENCE SCORING SYSTEM (0–100%):
-   A trade setup ONLY triggers a "High Probability" BUY/SELL alert when at least 3 of the following 5 modules align:
-   - Module 1 (SMC & ICT Framework): Automated detection of BOS, CHoCH, MSS across HTF (4H/1D) and LTF (15M/5M/1M); PD Arrays (Order Blocks, FVG, Mitigation/Breaker Blocks); BSL/SSL pools & Liquidity Sweeps/Judas Swings; ICT Killzones (London 02:00-05:00 EST, NY Open 07:00-10:00 EST, Silver Bullet 10:00-11:00 EST).
-   - Module 2 (Advanced Fibonacci Confluence): Dynamic Fib retracements from confirmed swing highs/lows; highlight ICT Optimal Trade Entry (OTE 0.618–0.786, with 0.705 as the institutional sweet spot); strictly filter Longs in Discount (<0.50 equilibrium) and Shorts in Premium (>0.50 equilibrium); project 1.272 (TP1), 1.618 (TP2), and 2.0 (TP3) Fibonacci Extensions.
-   - Module 3 (Institutional Candlestick & Price Action): Detect Bullish/Bearish Engulfing with volume expansion, Pin Bars/Hammer/Shooting Star sweeping liquidity, Three-Bar Reversals, Morning/Evening Stars, and Inside Bar breakouts SPECIFICALLY inside HTF POI zones (filter out standalone mid-range noise).
-   - Module 4 (Asset-Specific Quantitative Filters): CVD Divergences & OI flushes for Crypto Perpetuals; pre-spike bases & volatility bands for Synthetics; SMT correlation & Killzone weighting for Forex.
-   - Module 5 (Dynamic Risk & Execution Output): Exact Entry Zone (anchored at 0.705 OTE), Structural/ATR Stop Loss, and tiered TPs (1.272, 1.618, 2.0) with minimum 1:2.5 Risk-to-Reward ratio.
-
-You MUST respond strictly with a valid JSON object matching this schema. Do not add any extra explanation text, markdown code-blocks (\`\`\`json) or text before/after the JSON. Just return the raw JSON:
- 
-{
-  "imageQuality": {
-    "status": "passed" | "failed",
-    "details": "A detailed technical review assessing screenshot clarity, scale-readability, or indicator clutter. Evaluates each timeframe if multiple are received."
-  },
-  "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "marketStructure": "A brief structural description (e.g. Bullish Break of Structure (BOS) on H1, Liquidity swept, or Bearish CHoCH)",
-  "confluenceScore": 4.5,
-  "confluenceScorePct": 88,
-  "alignedModulesCount": 4,
-  "confluenceFormula": "HTF Order Block + 0.705 OTE + SSL Sweep + POI Engulfing = 88% Confluence",
-  "antiStopLossShield": {
-    "structuralInvalidationPrice": 1.0820,
-    "bufferPipsApplied": 5.0,
-    "protectionRationale": "Stop Loss placed safely behind structural displacement origin + ATR buffer rather than obvious retail swing wick to avoid stop hunts",
-    "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
-  },
-  "killZone": {
-    "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE",
-    "windowName": "The human-readable active window name",
-    "details": "Checking ICT Kill Zone status for New York time: ${nyTimeStr}. Provide high-priority analysis of whether the current setup aligns with this active zone (${killZoneName})."
-  },
-  "silverBullet": {
-    "status": "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE",
-    "windowName": "The human-readable active window name",
-    "details": "Checking Silver Bullet status for New York time: ${nyTimeStr}. Provide clear comments on whether FVG validation, Liquidity sweeps, or Order Blocks have confluence with this time-window, particularly for V75 (Order blocks) or Boom/Crash (Spike retests)."
-  },
-  "candleRangeTheory": {
-    "rangeHigh": 1620.00,
-    "rangeLow": 1540.00,
-    "sweepType": "HIGH_SWEPT" | "LOW_SWEPT" | "NONE",
-    "deliveryDirection": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "description": "Candle Range Theory (CRT) analysis explaining how HTF candle extremes acted as liquidity boundaries, highlighting any sweeps and delivery direction to opposite end."
-  },
-  "judasSwing": {
-    "detected": true,
-    "direction": "BULLISH" | "BEARISH" | "NEUTRAL",
-    "triggerLevel": 1622.50,
-    "description": "Explains where the Judas Swing false breakout swept liquidity (above rangeHigh or below rangeLow) before reversing and closing inside the range."
-  },
-  "powerOf3": {
-    "detected": true,
-    "accumulationRange": "1545.00 - 1558.00",
-    "manipulationLevel": 1538.50,
-    "distributionTarget": 1595.00,
-    "description": "Explains the tight range structure of the Accumulation phase, the false breakout Manipulation sweep (normally confluenced with the Judas Swing), and the subsequent strong Distribution price run toward opposing pools."
-  },
-  "multiTimeframe": {
-    "isMultiTimeframe": true,
-    "htfBias1D": "Step-by-step macro bias analysis on the 1D chart, locating primary pools and swing biases.",
-    "intermediateStructure4H": "Analysis of intermediate levels and structure alignments on 4H (e.g. Order blocks, FVG zones, shift in character).",
-    "entryPrecision30M": "Micro-precision entry zones identification on the 30M chart, refining entry blocks and exact trigger triggers.",
-    "confirmationMessage": "Confirmation verification of receiving 30M, 4H, and 1D timeframes for fully systemic top-down mechanical execution."
-  },
-  "suggestedRisk": "Tailored volatility-adjusted risk. Emphasize 1% max risk, wider stops, or lot size reduction based on indicators.",
-  "doActions": [
-    "Wait for price to retrace cleanly into the fresh H1 Demand Order Block + 0.705 OTE before launching operations.",
-    "Ensure lot size is scaled down 50% to account for high-range variance.",
-    "Take 50% off of the table at TP1 (1.272 Fib Extension) and move SL to break-even."
-  ],
-  "dontActions": [
-    "Do NOT chase vertical spikes on Boom/Crash; let pre-spike consolidation base form inside HTF OB first.",
-    "Do NOT widen the red stop-loss level once trade is active.",
-    "Do NOT engage if fewer than 3 of the 5 quantitative modules align."
-  ],
-  "detailedVisualDescription": "A technical step-by-step reasoning summary of what your Computer Vision/YOLO scanner detected on the original MT4/MT5 image.",
-  "orderBlock": {
-    "priceRange": "Detailed price boundary (e.g. 1545.20 - 1560.80 or standard units based on the chart labels)",
-    "type": "Type name (e.g., Mitigated H1 Order Block / Fresh Demand Order Block)",
-    "rationale": "SMC rationale for why this order block is significant for the entry"
-  },
-  "supplyDemandZones": {
-    "supply": "Supply area or resistance pool (e.g., 1610.00 - 1622.00)",
-    "demand": "Demand area or support pool (e.g., 1540.00 - 1555.00)",
-    "activeZone": "Supply / Demand / Equilibrium - specifying which one currently controls price"
-  },
-  "liquidityVoid": {
-    "priceRange": "Detailed price boundary of empty imbalance area to show on chart (e.g. 1575.00 - 1595.00)",
-    "description": "How the Liquidity Void acts as price magnet because of aggressive imbalance momentum"
-  },
-  "vacuumBlock": {
-    "priceRange": "Detailed price boundary of extreme spikes (e.g. 1515.00 - 1530.00)",
-    "description": "The exact return risk representation of extreme vertical gap vacuum blocks"
-  },
-  "candlestickPatterns": {
-    "patternName": "Detected patterns near POIs (e.g., Bullish Engulfing / Hammer / Morning Star / Bearish Shooting Star / Pin Bar)",
-    "context": "Contextual mechanical analysis of this pattern near the SMC zones"
-  },
-  "fibonacciRetracement": {
-    "level_50": 1550.00,
-    "level_618": 1545.00,
-    "level_705": 1541.50,
-    "level_786": 1538.00,
-    "ext_1272": 1590.00,
-    "ext_1618": 1610.00,
-    "ext_2000": 1635.00,
-    "description": "How the fibonacci OTE (0.618-0.786, 0.705 sweet spot) and extensions align with the SMC zones identified"
-  },
-  "tradeSetup": {
-    "type": "BUY" | "SELL" | "WAIT",
-    "entry": 1541.50,
-    "stopLoss": 1528.00,
-    "takeProfits": [1590.00, 1610.00, 1635.00],
-    "riskRewardRatio": "1:3.2",
-    "rationale": "High probability trigger events (e.g., Retracement to 0.705 OTE Demand zone, liquidity sweep confirmation)"
-  },
-  "educationalInsight": "A high-value lesson about this asset behavior, spikes, or typical SMC pitfalls to avoid."
-}`;
-
-    const textPart = {
-      text: `Analyze the provided chart screenshot(s) for ${symbol} indices under the ${timeframe} timeframe (or multiple top-down timeframes if provided, focusing annotation data on the 30M chart structure) according to Smart Money Concepts (SMC), Supply and Demand, and Fibonacci retracement mechanics. Estimate logical numerical index parameters for the entry, stop-loss, and take-profit targets based on the charts' visible numbers/ranges. If no numbers are available, invent logical relative figures starting around 1000.0 or 10000.0. Only offer a BUY/SELL signal if we have 4+ confluences, otherwise set to WAITING.`,
-    };
-
-    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
-      model: "gemini-3.8-flash",
-      contents: {
-        parts: [...contentParts, textPart]
-      },
-      config: {
-        systemInstruction: systemPromptMessage,
-        responseMimeType: "application/json",
-        temperature: 0.15,
-      },
-    });
-
-    const responseText = response.text;
-    if (!responseText) {
-      throw new Error("No response output returned from the Gemini modeling endpoint.");
-    }
-
-    // Safely parse the parsed output
-    let parsedResult;
-    try {
-      parsedResult = JSON.parse(responseText.trim());
-    } catch {
-      // Fallback parser if there is any markdown wrapping
-      const cleaned = responseText.replace(/```json/g, "").replace(/```/g, "").trim();
-      parsedResult = JSON.parse(cleaned);
-    }
-
-    res.json({
-      success: true,
-      data: parsedResult,
-    });
-  } catch (error: any) {
-    console.warn("Gemini Vision API notice, activating automated 5-Module SMC Confluence Engine:", error?.message);
-    const { symbol, timeframe, currentPrice } = req.body || {};
-    const fallbackData = generateFallbackSMCAnalysis(symbol || "Market Asset", timeframe || "H1", currentPrice);
-    res.json({
-      success: true,
-      data: fallbackData,
-    });
-  }
+app.post(["/api/analyze-chart", "/analyze-chart"], async (req, res) => {
+  await analyzeChartHandler(req, res);
 });
 
-function generateFallbackSMCAnalysis(symbol: string, timeframe: string, currentPrice?: number) {
-  const basePrice = currentPrice && currentPrice > 0 ? currentPrice : 1.0850;
-  const isHighValue = basePrice > 1000;
-  const isMediumValue = basePrice > 50 && basePrice <= 1000;
-  const step = isHighValue ? basePrice * 0.015 : isMediumValue ? basePrice * 0.02 : basePrice * 0.0045;
-
-  const entry = parseFloat((basePrice - step * 0.35).toFixed(basePrice < 5 ? 4 : 2));
-  const stopLoss = parseFloat((entry - step * 1.1).toFixed(basePrice < 5 ? 4 : 2));
-  const tp1 = parseFloat((entry + step * 1.8).toFixed(basePrice < 5 ? 4 : 2));
-  const tp2 = parseFloat((entry + step * 3.2).toFixed(basePrice < 5 ? 4 : 2));
-  const tp3 = parseFloat((entry + step * 4.5).toFixed(basePrice < 5 ? 4 : 2));
-  const equilibrium = parseFloat(((tp2 + stopLoss) / 2).toFixed(basePrice < 5 ? 4 : 2));
-
-  return {
-    imageQuality: {
-      status: "passed",
-      details: "High-definition structural candle matrix analyzed. Real-time liquidity mapped.",
-    },
-    bias: "BULLISH",
-    marketStructure: "Confirmed Bullish Market Structure Shift (MSS) with displacement above Asian session range.",
-    confluenceScore: 4.8,
-    confluenceScorePct: 92,
-    alignedModulesCount: 4,
-    confluenceFormula: "HTF Order Block + 0.705 OTE + SSL Liquidity Sweep + FVG Mitigation = 92% Confluence",
-    antiStopLossShield: {
-      structuralInvalidationPrice: stopLoss,
-      bufferPipsApplied: 6.5,
-      protectionRationale: "Stop Loss placed strictly behind the structural displacement origin candle + volatility buffer rather than obvious retail swing wicks to prevent Judas stop hunts.",
-      dealingRangePosition: "DISCOUNT_OTE",
-    },
-    killZone: {
-      status: "ACTIVE_LONDON",
-      windowName: "London Open Killzone (02:00-05:00 EST)",
-      details: "London Judas swing liquidity sweep below Asian low completed. True institutional expansion active.",
-    },
-    silverBullet: {
-      status: "ACTIVE_NY_AM",
-      windowName: "NY AM Silver Bullet (10:00-11:00 EST)",
-      details: "Institutional Fair Value Gap rebalance into unmitigated Demand POI.",
-    },
-    candleRangeTheory: {
-      rangeHigh: tp2,
-      rangeLow: stopLoss,
-      sweepType: "LOW_SWEPT",
-      deliveryDirection: "BULLISH",
-      description: "External sell-side liquidity swept with immediate bullish displacement candle.",
-    },
-    judasSwing: {
-      detected: true,
-      direction: "BULLISH",
-      triggerLevel: entry,
-      description: "False downward probe into institutional Demand zone rejected with aggressive orderflow absorption.",
-    },
-    powerOf3: {
-      detected: true,
-      accumulationRange: `${stopLoss} - ${entry}`,
-      manipulationLevel: stopLoss,
-      distributionTarget: tp2,
-      description: "AMD (Accumulation, Manipulation, Distribution) phase active. Price currently in expansion leg.",
-    },
-    multiTimeframe: {
-      isMultiTimeframe: true,
-      htfBias1D: "BULLISH",
-      intermediateStructure4H: "Unmitigated Bullish Order Block mitigation",
-      entryPrecision30M: "Clean 0.705 OTE mitigation inside 15M/30M Fair Value Gap",
-      confirmationMessage: "High-probability institutional confluence verified across all timeframes.",
-    },
-    suggestedRisk: "1.0% to 1.5% maximum account risk per position. Respect mechanical 1:3+ R:R.",
-    doActions: [
-      "Enter with limit order at the 0.705 OTE Discount entry zone",
-      "Take 50% partial profits at TP1 and move Stop Loss to Breakeven (+1 pip buffer)",
-      "Trail remaining runner to TP2 and TP3",
-    ],
-    dontActions: [
-      "Do not enter with market orders during wide spread expansions",
-      "Do not widen Stop Loss if initial invalidation level is breached",
-      "Do not take long positions in Premium (>50% equilibrium)",
-    ],
-    detailedVisualDescription: `Institutional order flow scan for ${symbol || "Instrument"}. Price swept sell-side liquidity, cleared retail stop clusters, and printed strong displacement leaving unmitigated Fair Value Gaps.`,
-    orderBlock: {
-      priceRange: `${entry} - ${stopLoss}`,
-      type: "Bullish Demand Order Block",
-      rationale: "Last bearish down-close candle prior to aggressive structural market displacement.",
-    },
-    supplyDemandZones: {
-      supply: `${tp2} - ${tp3}`,
-      demand: `${stopLoss} - ${entry}`,
-      activeZone: "Demand Mitigation Zone",
-    },
-    liquidityVoid: {
-      priceRange: `${entry} - ${tp1}`,
-      description: "Imbalance gap awaiting institutional rebalance during London/NY expansion.",
-    },
-    vacuumBlock: {
-      priceRange: `${stopLoss} - ${entry}`,
-      description: "Rapid price delivery with zero retail order matching.",
-    },
-    candlestickPatterns: {
-      patternName: "Bullish Engulfing Displacement Candle",
-      context: "Formed directly at HTF point of interest following sell-side liquidity sweep.",
-    },
-    fibonacciRetracement: {
-      level_50: equilibrium,
-      level_618: parseFloat((entry + (equilibrium - entry) * 0.4).toFixed(basePrice < 5 ? 4 : 2)),
-      level_705: entry,
-      level_786: parseFloat((entry - (entry - stopLoss) * 0.3).toFixed(basePrice < 5 ? 4 : 2)),
-      ext_1272: tp1,
-      ext_1618: tp2,
-      ext_2000: tp3,
-      description: "Optimal Trade Entry (0.705 sweet spot) aligned with unmitigated institutional Order Block in deep Discount (<50%).",
-    },
-    tradeSetup: {
-      type: "BUY",
-      entry: entry,
-      stopLoss: stopLoss,
-      takeProfits: [tp1, tp2, tp3],
-      riskRewardRatio: "1:3.4",
-      rationale: "Precision execution at 0.705 OTE Discount zone. Invalidation SL placed safely behind structural displacement origin.",
-    },
-    educationalInsight: "Institutional algorithms always engineer liquidity sweeps (Judas Swings) prior to true expansions. By waiting for the sweep and entering at the 0.705 OTE inside an unmitigated Order Block, you align with smart money flows instead of retail stop traps.",
-  };
-}
-
-// AI Chat Bot endpoint with context awareness
-app.post(["/api/chat-bot", "/chat-bot"], async (req: express.Request, res: express.Response): Promise<void> => {
-  try {
-    const { prompt, history, currentAnalysis, tradeHistory, learnings, educationalMode, chartImage, activeSymbol } = req.body;
-
-    if (!prompt) {
-      res.status(400).json({ error: "No prompt message provided." });
-      return;
-    }
-
-    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
-    const ai = getGeminiClient(customKey);
-
-    // Prepare systemic constraints and inject collections data
-    let companionDirective = `You are the world's most disciplined, institutional SMC (Smart Money Concepts) Elite Mentor and Chief Risk Officer.
-You possess world-class expertise in eliminating retail losses and mastering institutional market execution across:
-1. FOREX CURRENCY PAIRS (Majors: EUR/USD, GBP/USD, USD/JPY, AUD/USD, USD/CAD, USD/CHF, NZD/USD; Crosses: GBP/JPY, EUR/JPY, EUR/GBP, EUR/AUD, GBP/CAD, AUD/NZD, etc.):
-   - ANTI-STOP-LOSS HUNTING ARCHITECTURE (CRITICAL MANDATE):
-     * Why 95% of retail setups hit Stop Loss: Retail traders place tight SLs directly at obvious swing highs/lows or equal highs/lows (EQH/EQL). Institutional algorithms (smart money banks) intentionally engineer liquidity sweeps (Turtle Soup / Judas Swing) that probe 3-10 pips beyond these levels before reversing into the true target!
-     * Structural Invalidation Placement: NEVER place Stop Loss right at the swing extreme or candle wick edge. The Stop Loss MUST be placed strictly beyond the structural displacement candle origin (the true candle that sponsored the Market Structure Shift or FVG creation) PLUS an asset-specific spread buffer:
-       - Major pairs (EUR/USD, USD/JPY, AUD/USD): Minimum 4 to 6 pips buffer beyond structural invalidation.
-       - Volatile pairs (GBP/USD, USD/CAD): Minimum 6 to 8 pips buffer.
-       - High ATR Crosses (GBP/JPY, EUR/JPY, GBP/AUD): Minimum 10 to 15 pips buffer to survive wide broker spreads.
-     * The Premium vs. Discount 50% Rule: NEVER buy in Premium (>50% of the dealing range); NEVER sell in Discount (<50% of the dealing range). High probability entries MUST retrace to the 0.618 - 0.786 OTE (Optimal Trade Entry) zone inside Discount for buys, or Premium for sells.
-     * Killzone Precision & London Judas Swing:
-       - Asian Range (19:00-00:00 EST / 00:00-05:00 UTC): Establishes Asian High & Low liquidity boundaries.
-       - London Open Killzone (02:00-05:00 EST / 07:00-10:00 UTC): Over 70% of the time, the daily high or low is forged here via a Judas Swing (manipulation sweep of the Asian High or Low) before aggressive displacement in the real daily trend.
-       - New York AM Killzone (07:00-10:00 EST / 12:00-15:00 UTC): Highest liquidity session. Silver Bullet window (10:00-11:00 AM EST).
-       - London Close / NY PM (14:00-17:00 UTC): Profit taking; do not take fresh continuation setups here.
-     * SMT (Smart Money Technique) Divergence:
-       - Watch for correlation cracks between EUR/USD and GBP/USD (positive correlation), or DXY and EUR/USD (inverse correlation).
-       - When EUR/USD makes a Higher High but GBP/USD fails and prints a Lower High, Smart Money is secretly selling — this confirms the EUR/USD breakout was a retail trap!
-     * Red-Folder High-Impact News Blackout: Do NOT trade 15 minutes before or 15 minutes after CPI, NFP, FOMC rate decisions, or central bank speeches. Wait for news volatility to settle, identify the institutional displacement candle, and enter only on the subsequent FVG retest.
-     * In-Trade Risk Management: Always target minimum 1:2.5 or 1:3 Risk-to-Reward. Always take 50% partial profits at TP1 (first external liquidity pool) and move Stop Loss to Breakeven (+1 pip buffer) immediately to guarantee zero loss!
-
-2. GOLD (XAU/USD) INSTITUTIONAL PLAYBOOK:
-   - Asian range sweeps, London Judas swings into 15M/1H OBs, NY AM Silver Bullet (10:00-11:00 AM EST), psychological round number handles ($2600, $2650, $2700), CPI/NFP displacement wicks.
-
-3. BITCOIN (BTC/USD) 24/7 SMC PLAYBOOK:
-   - CME Friday-to-Sunday gap fills (85%+ probability), weekend range liquidity sweeps, Monday weekly open Power of 3 (AMD), funding rate liquidation cascades into 1H/4H Breaker Blocks.
-
-4. DERIV SYNTHETIC INDICES:
-   - Volatility Indices (V75, V100), Boom/Crash Spike Dynamics, Step Index, and Jump Indices. 24/7 algorithmic execution, no news slippage.
-
-Provide professional, crisp, and high-value trading advice. Emphasize capital preservation and exact mechanical rules over gambling.
-
-The active asset currently selected on screen is: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General/Unspecified"}.
-`;
-
-    if (educationalMode) {
-      companionDirective += `EDUCATIONAL MODE IS ON:
-- Break down concepts step-by-step with clear definitions (e.g., Order Block, CHoCH vs BOS, liquidity pools, FVGs, OTE 0.705 Fib, Anti-SL buffer).
-- Avoid dry answers; use clean typographic layouts (bullet points, bold highlights, markdown tables).
-- Frequently challenge the student with interactive quizzes! Offer multiple options (A, B, or C) and explain the mechanical institutional answer when they respond.
-`;
-    } else {
-      companionDirective += `TACTICAL MODE IS ON:
-- Be highly precise, concise, and focused on immediate mechanical trade setups.
-- Use bullet points for entry, stop loss (with exact buffer), and target instructions.
-`;
-    }
-
-    // Inject past analysis contexts if active of index configurations
-    if (currentAnalysis) {
-      companionDirective += `
-CURRENT ON-SCREEN ANALYSIS context:
-- Bias: ${currentAnalysis.bias || "N/A"}
-- Structure: ${currentAnalysis.marketStructure || "N/A"}
-- Active Order Block: ${JSON.stringify(currentAnalysis.orderBlock || {})}
-- Supply/Demand: ${JSON.stringify(currentAnalysis.supplyDemandZones || {})}
-- Setup Recs: ${JSON.stringify(currentAnalysis.tradeSetup || {})}
-Use this analysis if the user is asking "What should I do here?" or "Explain this setup". Otherwise, keep it as context.
-`;
-    }
-
-    // "Learn from me" Mode: Inject user-specific learnings
-    if (learnings && learnings.length > 0) {
-      companionDirective += `
-USER-SAVED LEARNINGS HISTORY ("Learn from me" database integration):
-You MUST remember and reference these previous lessons, notes, or tips that the user has recorded whenever they relate to their query:
-${learnings.map((l: any, i: number) => `- [Learning #${i + 1}]: ${l.learnings || l} (Category: ${l.category || "General"})`).join("\n")}
-Acknowledge these learnings warmly to show you are aligned with their cumulative experience.
-`;
-    }
-
-    // Inject user's historical performance logs
-    if (tradeHistory && tradeHistory.length > 0) {
-      const won = tradeHistory.filter((t: any) => t.status === "WON").length;
-      const lost = tradeHistory.filter((t: any) => t.status === "LOST").length;
-      const total = tradeHistory.length;
-      const winRate = total > 0 ? Math.round((won / total) * 100) : 0;
-      
-      companionDirective += `
-USER TRADING LOG PERFORMANCE:
-- Total Logged Trades: ${total}
-- Win Rate: ${winRate}% (${won} Wins, ${lost} Losses)
-- Favorite Assets: ${Array.from(new Set(tradeHistory.map((t: any) => t.symbol))).slice(0, 4).join(", ")}
-Analyze their past pattern failures or successes if they ask for a 'performance audit', 'journal review', or 'how am I doing?'.
-`;
-    }
-
-    // Format chat contents
-    const contents: any[] = [];
-    
-    // Mount past history if available
-    if (history && Array.isArray(history)) {
-      history.forEach((h: any) => {
-        contents.push({
-          role: h.role === "user" ? "user" : "model",
-          parts: [{ text: h.parts?.[0]?.text || h.message || "" }]
-        });
-      });
-    }
-
-    // Build parts for the current message
-    const currentParts: any[] = [];
-
-    // Attach chart image if loaded and safely sized (< 4MB)
-    if (chartImage && typeof chartImage === "string" && chartImage.length > 50 && chartImage.length < 4000000) {
-      let base64Data = chartImage.replace(/\s+/g, '');
-      let mimeType = "image/png";
-      if (chartImage.startsWith("data:")) {
-        const parts = chartImage.split(";base64,");
-        if (parts.length === 2) {
-          mimeType = parts[0].replace("data:", "");
-          base64Data = parts[1].replace(/\s+/g, '');
-        }
-      }
-      if (base64Data.length > 0) {
-        currentParts.push({
-          inlineData: {
-            mimeType,
-            data: base64Data
-          }
-        });
-      }
-    }
-
-    currentParts.push({ text: prompt });
-    contents.push({ role: "user", parts: currentParts });
-
-    const response = await generateGeminiContent(ai, "gemini-2.5-flash", {
-      model: "gemini-2.5-flash",
-      contents,
-      config: {
-        systemInstruction: companionDirective,
-        temperature: 0.7,
-      }
-    });
-
-    res.json({
-      success: true,
-      data: response.text || "I was unable to formulate a response at this time."
-    });
-
-  } catch (error: any) {
-    console.error("Chat Bot API error:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to process chat conversation."
-    });
-  }
+app.post(["/api/chat-bot", "/chat-bot"], async (req, res) => {
+  await chatBotHandler(req, res);
 });
 
-// Premium SVG / AI Generated Educational Image Route
-app.post(["/api/generate-educational-image", "/generate-educational-image"], async (req: express.Request, res: express.Response): Promise<void> => {
-  try {
-    const { subject, explanation } = req.body;
-
-    if (!subject) {
-      res.status(400).json({ error: "Missing educational diagram subject requested." });
-      return;
-    }
-
-    const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
-    const ai = getGeminiClient(customKey);
-
-    // Ask Gemini text model to render a beautifully styled trade illustration SVG.
-    // This allows custom, fully labeled charts without standard imagen quota blocks!
-    const svgSystemPrompt = `You are an elite diagram designer.
-Produce a fully complete, self-contained, valid, clean raw SVG file (width 800, height 500) representing high-probability Smart Money trading concepts.
-Ensure the layout is responsive, beautiful, dark cyberstyled (slate-950 background, gridlines, bright green wicks, glowing cyan Order Block indicators, and clean rose stop-loss targets).
-
-Your output MUST be exclusively the raw SVG code starting with "<svg" and ending with "</svg>".
-Do NOT write markdown code blocks (\`\`\`xml or \`\`\`svg) in the output. Just return the clean raw SVG content.`;
-
-    const svgPromptText = `Generate a high-impact visual SVG layout for: ${subject}. 
-Context: ${explanation || "Detailed SMC guide"}.
-Use nice SVG tags, text boxes, and charts. Make it extremely visual and beautiful.`;
-
-    const response = await generateGeminiContent(ai, "gemini-3.8-flash", {
-      model: "gemini-3.8-flash",
-      contents: svgPromptText,
-      config: {
-        systemInstruction: svgSystemPrompt,
-        temperature: 0.3,
-      }
-    });
-
-    let rawSvg = response.text?.trim() || "";
-    
-    // Clean up markdown block leaks if any
-    if (rawSvg.startsWith("```")) {
-      rawSvg = rawSvg.replace(/^```[a-zA-Z]*\n/, "").replace(/\n```$/, "").trim();
-    }
-
-    if (!rawSvg.startsWith("<svg")) {
-      // Absolute fallback if text model didn't return standard SVG
-      rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="100%" height="100%">
-        <rect width="800" height="500" fill="#0b0f19" rx="15" />
-        <grid patternUnits="userSpaceOnUse" width="40" height="40">
-          <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
-        </grid>
-        <text x="400" y="220" fill="#22d3ee" font-family="sans-serif" font-size="24" font-weight="bold" text-anchor="middle">SMC MECHANICAL DIAGRAM</text>
-        <text x="400" y="260" fill="#94a3b8" font-family="sans-serif" font-size="14" text-anchor="middle">${subject.toUpperCase()}: Schematic representation loaded successfully</text>
-        <rect x="250" y="300" width="300" height="40" rx="10" fill="#1e293b" stroke="#334155" />
-        <text x="400" y="325" fill="#10b981" font-family="monospace" font-size="12" font-weight="bold" text-anchor="middle">RETRACE TO ORDER BLOCK COMPLETED</text>
-      </svg>`;
-    }
-
-    // Convert to Base64 format
-    const base64Svg = Buffer.from(rawSvg).toString("base64");
-    const dataUrl = `data:image/svg+xml;base64,${base64Svg}`;
-
-    res.json({
-      success: true,
-      imageUrl: dataUrl,
-      svg: rawSvg
-    });
-
-  } catch (error: any) {
-    console.error("Diagram Builder Exception:", error);
-    res.status(500).json({
-      success: false,
-      error: error.message || "Failed to compile schematic illustration."
-    });
-  }
+app.post(["/api/generate-educational-image", "/generate-educational-image"], async (req, res) => {
+  await generateEducationalImageHandler(req, res);
 });
 
 // GitHub Auto-Sync API Endpoint
@@ -847,7 +72,7 @@ app.post(["/api/github-sync", "/github-sync"], async (req: express.Request, res:
     if (!githubToken || !githubOwner || !githubRepo) {
       res.status(400).json({
         success: false,
-        error: "Missing GitHub credentials. Please provide GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO in the request body or environment variables."
+        error: "Missing GitHub credentials. Provide GITHUB_TOKEN, GITHUB_OWNER, and GITHUB_REPO.",
       });
       return;
     }
@@ -857,7 +82,7 @@ app.post(["/api/github-sync", "/github-sync"], async (req: express.Request, res:
       owner: githubOwner,
       repo: githubRepo,
       branch: branch || "main",
-      commitMessage: commitMessage || "feat: automatic push of AI trading workstation to GitHub repository",
+      commitMessage: commitMessage || "feat: QuantSMC Brain Upgrade + Chart SMC Overlays",
     });
 
     res.json(result);
@@ -865,7 +90,7 @@ app.post(["/api/github-sync", "/github-sync"], async (req: express.Request, res:
     console.error("GitHub Sync API Exception:", error);
     res.status(500).json({
       success: false,
-      error: error.message || "Failed to push files to GitHub repository."
+      error: error.message || "Failed to push files to GitHub repository.",
     });
   }
 });
@@ -885,17 +110,18 @@ async function mountFrontend() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Synthetics Analyzer] Service up and running in ${process.env.NODE_ENV || "development"} mode at: http://localhost:${PORT}`);
+    console.log(
+      `[QuantSMC] Server running in ${process.env.NODE_ENV || "development"} mode at http://localhost:${PORT}`
+    );
   });
 }
 
-// Only mount local Vite/static server and listen to PORT when not in Vercel Serverless environment
 if (!process.env.VERCEL) {
   mountFrontend();
 }

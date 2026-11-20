@@ -91,8 +91,8 @@ export default function TradeSettlementForm({ trade, onSave }: TradeSettlementFo
   };
 
   return (
-    <div className="bg-white border border-slate-200 p-4 rounded-xl space-y-4" id={`settlement-panel-${trade.id}`}>
-      <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+    <div className="bg-[#F1F4F8] border border-slate-300 p-4 rounded-xl space-y-4" id={`settlement-panel-${trade.id}`}>
+      <div className="flex items-center justify-between border-b border-slate-300 pb-2.5">
         <h4 className="text-xs font-bold text-slate-900 font-display flex items-center gap-1.5">
           <Calculator className="h-4 w-4 text-emerald-600" />
           Outcome Settlement &amp; Realized P&amp;L

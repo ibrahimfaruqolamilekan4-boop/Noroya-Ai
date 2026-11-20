@@ -303,11 +303,11 @@ export default function ChatSidebar({
 
   return (
     <div
-      className="flex flex-col h-full bg-white border-l border-slate-200 w-full relative text-slate-900"
+      className="flex flex-col h-full bg-[#ECEFF4] border-l border-slate-300 w-full relative text-slate-900"
       id="chat-sidebar-workspace"
     >
       {/* HEADER CONTROLS */}
-      <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-white sticky top-0 z-10">
+      <div className="p-4 border-b border-slate-300 flex items-center justify-between bg-[#F1F4F8] sticky top-0 z-10">
         <div className="flex items-center gap-2.5">
           <div className="p-1.5 rounded-lg bg-emerald-50 border border-emerald-200">
             <BrainCircuit className="h-4 w-4 text-emerald-600" />
@@ -331,13 +331,13 @@ export default function ChatSidebar({
       </div>
 
       {/* TABS NAVIGATION */}
-      <div className="grid grid-cols-2 bg-[#F8FAF9] border-b border-slate-200 text-xs">
+      <div className="grid grid-cols-2 bg-[#E8ECF2] border-b border-slate-300 text-xs">
         <button
           onClick={() => setActiveTab("chat")}
           className={`py-2.5 text-center font-semibold transition border-b-2 cursor-pointer ${
             activeTab === "chat"
-              ? "text-emerald-700 border-emerald-600 bg-white"
-              : "text-slate-500 border-transparent hover:text-slate-900"
+              ? "text-emerald-700 border-emerald-600 bg-[#F1F4F8]"
+              : "text-slate-600 border-transparent hover:text-slate-900"
           }`}
         >
           AI Desk Chat
@@ -346,8 +346,8 @@ export default function ChatSidebar({
           onClick={() => setActiveTab("learnings")}
           className={`py-2.5 text-center font-semibold transition border-b-2 cursor-pointer ${
             activeTab === "learnings"
-              ? "text-emerald-700 border-emerald-600 bg-white"
-              : "text-slate-500 border-transparent hover:text-slate-900"
+              ? "text-emerald-700 border-emerald-600 bg-[#F1F4F8]"
+              : "text-slate-600 border-transparent hover:text-slate-900"
           }`}
         >
           Custom Rules ({learnings.length})
@@ -355,10 +355,10 @@ export default function ChatSidebar({
       </div>
 
       {/* CORE SCREENS SCROLL SCENE */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[calc(100vh-180px)] bg-[#F8FAF9]">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[calc(100vh-180px)] bg-[#E4E8EE]">
         {activeTab === "chat" && (
           <div className="space-y-4 flex flex-col justify-end min-h-full">
-            <div className="bg-white border border-slate-200 p-3.5 rounded-xl space-y-3">
+            <div className="bg-[#F1F4F8] border border-slate-300 p-3.5 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
                   <GraduationCap className="h-4 w-4 text-emerald-600" />
@@ -445,7 +445,7 @@ export default function ChatSidebar({
                     <div
                       className={`p-3.5 rounded-xl text-xs leading-relaxed ${
                         isBot
-                          ? "bg-white border border-slate-200 text-slate-800"
+                          ? "bg-[#F1F4F8] border border-slate-300 text-slate-800"
                           : "bg-emerald-600 text-white rounded-br-none"
                       }`}
                       style={{ whiteSpace: "pre-wrap" }}
@@ -456,7 +456,7 @@ export default function ChatSidebar({
                         <div className="mt-2.5">
                           <div
                             onClick={() => setImageModalUrl(imageModalUrl)}
-                            className="bg-[#F8FAF9] aspect-[8/5] w-full rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:border-emerald-600 transition relative"
+                            className="bg-[#E8ECF2] aspect-[8/5] w-full rounded-lg overflow-hidden border border-slate-300 cursor-pointer hover:border-emerald-600 transition relative"
                           >
                             <img
                               src={imageModalUrl}
@@ -474,7 +474,7 @@ export default function ChatSidebar({
               {isSending && (
                 <div className="flex flex-col max-w-[85%] self-start mr-auto">
                   <span className="text-[10px] text-slate-500 font-mono mb-1">QuantSMC Copilot</span>
-                  <div className="bg-white border border-slate-200 p-3.5 rounded-xl flex items-center gap-2 text-slate-600 text-xs">
+                  <div className="bg-[#F1F4F8] border border-slate-300 p-3.5 rounded-xl flex items-center gap-2 text-slate-600 text-xs">
                     <Loader2 className="h-4 w-4 text-emerald-600 animate-spin" />
                     Evaluating market structure...
                   </div>
@@ -488,7 +488,7 @@ export default function ChatSidebar({
 
         {activeTab === "learnings" && (
           <div className="space-y-4">
-            <div className="bg-white border border-slate-200 p-4 rounded-xl">
+            <div className="bg-[#F1F4F8] border border-slate-300 p-4 rounded-xl">
               <h4 className="text-xs font-bold text-slate-900 font-display mb-1 flex items-center gap-1.5">
                 <PlusCircle className="h-4 w-4 text-emerald-600" />
                 Save Custom Trading Rule
@@ -566,13 +566,13 @@ export default function ChatSidebar({
               </h4>
 
               {learnings.length === 0 ? (
-                <div className="p-6 text-center border border-dashed border-slate-300 bg-white rounded-xl text-slate-500 text-xs">
+                <div className="p-6 text-center border border-dashed border-slate-300 bg-[#F1F4F8] rounded-xl text-slate-600 text-xs">
                   No custom rules stored yet.
                 </div>
               ) : (
                 <div className="space-y-2">
                   {learnings.map((l) => (
-                    <div key={l.id} className="p-3 bg-white border border-slate-200 rounded-lg space-y-1">
+                    <div key={l.id} className="p-3 bg-[#F1F4F8] border border-slate-300 rounded-lg space-y-1">
                       <div className="flex justify-between items-center text-[11px] font-mono">
                         <span className="text-emerald-700 font-semibold">{l.category}</span>
                         <span className="text-slate-500">{l.symbol}</span>
@@ -589,8 +589,8 @@ export default function ChatSidebar({
 
       {/* FOOTER MESSAGE INPUT */}
       {activeTab === "chat" && (
-        <div className="p-4 border-t border-slate-200 bg-white space-y-3 sticky bottom-0 left-0 right-0 z-10">
-          <div className="bg-[#F8FAF9] border border-slate-200 p-2 rounded-lg flex items-center justify-between gap-2 text-xs">
+        <div className="p-4 border-t border-slate-300 bg-[#F1F4F8] space-y-3 sticky bottom-0 left-0 right-0 z-10">
+          <div className="bg-[#E8ECF2] border border-slate-300 p-2 rounded-lg flex items-center justify-between gap-2 text-xs">
             <div className="flex items-center gap-1.5 min-w-0">
               <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
               <select
@@ -656,7 +656,7 @@ export default function ChatSidebar({
           className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
           onClick={() => setImageModalUrl(null)}
         >
-          <div className="relative max-w-4xl w-full max-h-[85vh] bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-2xl p-6 flex flex-col items-center">
+          <div className="relative max-w-4xl w-full max-h-[85vh] bg-[#F1F4F8] border border-slate-300 rounded-2xl overflow-hidden shadow-2xl p-6 flex flex-col items-center">
             <button
               onClick={() => setImageModalUrl(null)}
               className="absolute top-4 right-4 bg-slate-100 hover:bg-slate-200 text-slate-700 p-2 rounded-lg transition cursor-pointer z-10"

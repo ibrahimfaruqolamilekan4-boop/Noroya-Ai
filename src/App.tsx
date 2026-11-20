@@ -42,17 +42,24 @@ import ChatSidebar from "./components/ChatSidebar";
 import TradeSettlementForm from "./components/TradeSettlementForm";
 import PnlGrowthChart from "./components/PnlGrowthChart";
 import QuickNoteModal from "./components/QuickNoteModal";
-import LiveTradingViewChart from "./components/LiveTradingViewChart";
+import LiveTradingViewChart, { DivergenceInfo } from "./components/LiveTradingViewChart";
 import PineScriptGenerator from "./components/PineScriptGenerator";
 import { LandingPage } from "./components/LandingPage";
 import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { QuantAnalyzerPanel } from "./components/QuantAnalyzerPanel";
+import { VisionReportView } from "./components/VisionReportView";
+import { MarketDataProvider } from "./context/MarketDataContext";
 import { cacheChartStateToSW } from "./lib/usePWAInstall";
 import { auth as firebaseAuth } from "./lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { getUserLearnings } from "./lib/firebaseChat";
 import { useMarketData } from "./hooks/useMarketData";
-import { formatPrice, evaluateMultiFactorConfluence, evaluateStructuralScan } from "./lib/quantEngine";
+import {
+  formatPrice,
+  evaluateMultiFactorConfluence,
+  buildQuantContextPayload,
+  QuantitativeEvaluation,
+} from "./lib/quantEngine";
 import { StandardCandle } from "./services/MarketDataService";
 
 const compressImage = async (
@@ -215,6 +222,34 @@ function generateLiveChartSnapshot(
 }
 
 export default function App() {
+  const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
+  const [timeframe, setTimeframe] = useState<string>("H1");
+
+  return (
+    <MarketDataProvider symbol={symbol} timeframe={timeframe}>
+      <QuantWorkstation
+        symbol={symbol}
+        setSymbol={setSymbol}
+        timeframe={timeframe}
+        setTimeframe={setTimeframe}
+      />
+    </MarketDataProvider>
+  );
+}
+
+interface QuantWorkstationProps {
+  symbol: SyntheticSymbol;
+  setSymbol: React.Dispatch<React.SetStateAction<SyntheticSymbol>>;
+  timeframe: string;
+  setTimeframe: React.Dispatch<React.SetStateAction<string>>;
+}
+
+function QuantWorkstation({
+  symbol,
+  setSymbol,
+  timeframe,
+  setTimeframe,
+}: QuantWorkstationProps) {
   const [currentRoute, setCurrentRoute] = useState<"landing" | "dashboard">(() => {
     if (
       typeof window !== "undefined" &&
@@ -234,13 +269,14 @@ export default function App() {
   const [marketClassFilter, setMarketClassFilter] = useState<
     "ALL" | MarketClassType
   >("ALL");
-  const [symbol, setSymbol] = useState<SyntheticSymbol>(SYNTHETIC_SYMBOLS[0]);
-  const [timeframe, setTimeframe] = useState<string>("H1");
   const [customSymbolText, setCustomSymbolText] = useState("");
   const [symbolSearchQuery, setSymbolSearchQuery] = useState("");
 
-  // Live Multi-Provider WebSocket Ingestion (Bybit Linear V5 + Deriv Public WS)
-  const { candles, latestCandle, futuresTelemetry, telemetry } = useMarketData(symbol, timeframe);
+  // Shared live stream + real MTF (1D/4H) + paired SMT reference from MarketDataProvider
+  const { candles, latestCandle, futuresTelemetry, telemetry, mtfCandles, smtReference } =
+    useMarketData(symbol, timeframe);
+  const [liveQuantEvaluation, setLiveQuantEvaluation] = useState<QuantitativeEvaluation | null>(null);
+  const [liveDivergences, setLiveDivergences] = useState<DivergenceInfo[]>([]);
 
   const navigateToDashboard = () => {
     setCurrentRoute("dashboard");
@@ -568,34 +604,38 @@ export default function App() {
 
   const startSMCAnalysis = async (overrideImage?: string) => {
     let targetImage = overrideImage || imagePreview;
+    let mtfSnap30m = mtfImages.m30.preview;
+    let mtfSnap4h = mtfImages.h4.preview;
+    let mtfSnap1d = mtfImages.d1.preview;
 
     if (isMtfMode) {
-      if (
-        !mtfImages.m30.preview ||
-        !mtfImages.h4.preview ||
-        !mtfImages.d1.preview
-      ) {
-        // Auto-generate top-down snapshots across 30M, 4H, and 1D if not manually uploaded
-        const snap30m = generateLiveChartSnapshot(candles, symbol, "30M");
-        const snap4h = generateLiveChartSnapshot(candles, symbol, "4H");
-        const snap1d = generateLiveChartSnapshot(candles, symbol, "1D");
+      if (!mtfSnap30m || !mtfSnap4h || !mtfSnap1d) {
+        // Use REAL multi-timeframe candles (1D, 4H, active TF) when generating top-down chart snapshots
+        mtfSnap30m = generateLiveChartSnapshot(candles, symbol, timeframe);
+        mtfSnap4h = generateLiveChartSnapshot(
+          mtfCandles?.h4 && mtfCandles.h4.length > 10 ? mtfCandles.h4 : candles,
+          symbol,
+          "4H"
+        );
+        mtfSnap1d = generateLiveChartSnapshot(
+          mtfCandles?.d1 && mtfCandles.d1.length > 10 ? mtfCandles.d1 : candles,
+          symbol,
+          "1D"
+        );
         setMtfImages({
-          m30: { file: null, preview: snap30m, original: snap30m },
-          h4: { file: null, preview: snap4h, original: snap4h },
-          d1: { file: null, preview: snap1d, original: snap1d },
+          m30: { file: null, preview: mtfSnap30m, original: mtfSnap30m },
+          h4: { file: null, preview: mtfSnap4h, original: mtfSnap4h },
+          d1: { file: null, preview: mtfSnap1d, original: mtfSnap1d },
         });
-        targetImage = snap30m;
-        setImagePreview(snap30m);
-        setOriginalImage(snap30m);
+        targetImage = mtfSnap30m;
+        setImagePreview(mtfSnap30m);
+        setOriginalImage(mtfSnap30m);
       }
-    } else {
-      if (!targetImage) {
-        // Auto-capture live high-resolution candlestick chart matrix directly from market candles
-        const autoSnap = generateLiveChartSnapshot(candles, symbol, timeframe);
-        targetImage = autoSnap;
-        setImagePreview(autoSnap);
-        setOriginalImage(autoSnap);
-      }
+    } else if (!targetImage) {
+      const autoSnap = generateLiveChartSnapshot(candles, symbol, timeframe);
+      targetImage = autoSnap;
+      setImagePreview(autoSnap);
+      setOriginalImage(autoSnap);
     }
 
     setIsAnalyzing(true);
@@ -610,85 +650,43 @@ export default function App() {
       setAnalysisProgress(loadingPhrases[phraseIdx]);
     }, 1200);
 
+    // Exact live price from our shared Bybit / Deriv WebSocket stream (never defaults to R_75!)
+    const liveSpotPrice = latestCandle?.close || (candles.length > 0 ? candles[candles.length - 1].close : symbol.defaultPrice);
+
+    // Compute exact real-time mathematical SMC telemetry to ground Hybrid AI Vision
+    const freshQuantEval = evaluateMultiFactorConfluence(
+      symbol,
+      timeframe,
+      undefined,
+      liveSpotPrice,
+      candles,
+      futuresTelemetry,
+      mtfCandles,
+      smtReference
+    );
+    const quantContext = buildQuantContextPayload(
+      freshQuantEval,
+      liveSpotPrice,
+      liveDivergences,
+      trades
+    );
+
     try {
       let learningsData: any[] = [];
       try {
         learningsData = await getUserLearnings();
       } catch (le) {
-        console.warn(
-          "Could not fetch user learnings for reinforcement learning:",
-          le
-        );
-      }
-
-      let currentPrice: number | null = null;
-      try {
-        currentPrice = await new Promise((resolve, reject) => {
-          const timeout = setTimeout(
-            () => reject(new Error("Deriv API Timeout")),
-            2500
-          );
-          const derivAppId =
-            (import.meta as any).env?.VITE_DERIV_APP_ID || "1089";
-          const ws = new WebSocket(
-            `wss://ws.binaryws.com/websockets/v3?app_id=${derivAppId}`
-          );
-
-          ws.onopen = () => {
-            const tk = symbol.ticker;
-            const derivSymbol =
-              tk === "V10"
-                ? "R_10"
-                : tk === "V25"
-                  ? "R_25"
-                  : tk === "V50"
-                    ? "R_50"
-                    : tk === "V75"
-                      ? "R_75"
-                      : tk === "V100"
-                        ? "R_100"
-                        : tk === "B1000"
-                          ? "BOOM1000"
-                          : tk === "B500"
-                            ? "BOOM500"
-                            : tk === "C1000"
-                              ? "CRASH1000"
-                              : tk === "C500"
-                                ? "CRASH500"
-                                : tk === "STEP"
-                                  ? "STPRNG"
-                                  : tk === "J100"
-                                    ? "JD100"
-                                    : "R_75";
-            ws.send(JSON.stringify({ ticks: derivSymbol }));
-          };
-          ws.onmessage = (msg) => {
-            const data = JSON.parse(msg.data);
-            if (data.error) {
-              reject(new Error(data.error.message));
-            } else if (data.tick && data.tick.quote) {
-              clearTimeout(timeout);
-              ws.close();
-              resolve(Number(data.tick.quote));
-            }
-          };
-          ws.onerror = (err) => {
-            clearTimeout(timeout);
-            reject(err);
-          };
-        });
-      } catch (e) {
-        console.warn("Could not fetch live Deriv market data:", e);
+        console.warn("Could not fetch user learnings:", le);
       }
 
       let compressedImages: string[] = [];
       let compressedTargetImage = targetImage;
 
-      if (isMtfMode) {
+      if (isMtfMode && mtfSnap30m && mtfSnap4h && mtfSnap1d) {
         compressedImages = await Promise.all([
-          compressImage(mtfImages.m30.preview!),
-          compressImage(mtfImages.h4.preview!),
-          compressImage(mtfImages.d1.preview!),
+          compressImage(mtfSnap30m),
+          compressImage(mtfSnap4h),
+          compressImage(mtfSnap1d),
         ]);
       } else if (targetImage) {
         compressedTargetImage = await compressImage(targetImage);
@@ -698,18 +696,20 @@ export default function App() {
         ? {
             images: compressedImages,
             symbol: customSymbolText ? customSymbolText : symbol.name,
-            timeframe: "30M",
+            timeframe,
             tradeHistory: trades,
             learnings: learningsData,
-            currentPrice: currentPrice,
+            currentPrice: liveSpotPrice,
+            quantContext,
           }
         : {
             image: compressedTargetImage,
             symbol: customSymbolText ? customSymbolText : symbol.name,
-            timeframe: timeframe,
+            timeframe,
             tradeHistory: trades,
             learnings: learningsData,
-            currentPrice: currentPrice,
+            currentPrice: liveSpotPrice,
+            quantContext,
           };
 
       const response = await fetch(`/api/analyze-chart?_t=${Date.now()}`, {
@@ -725,9 +725,7 @@ export default function App() {
 
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/json")) {
-        throw new Error(
-          `Server returned a non-JSON response (Status ${response.status}). Ensure the server environment variables are configured.`
-        );
+        throw new Error(`Server returned status ${response.status}`);
       }
       const parsed = await response.json();
       clearInterval(phraseInterval);
@@ -738,61 +736,145 @@ export default function App() {
         setErrorMessage("");
         return;
       }
-      throw new Error(parsed?.error || "Server response requires fallback");
+      throw new Error(parsed?.error || "Server response requires local deterministic calculation");
     } catch (err: any) {
-      console.warn("Notice: Activating high-precision local 5-Module SMC Confluence calculation:", err?.message);
-      const activePrice = latestCandle?.close || symbol.defaultPrice || 1.085;
-      const clientEval = evaluateMultiFactorConfluence(symbol, timeframe, activePrice);
-      const clientScan = evaluateStructuralScan(candles && candles.length > 0 ? candles : [], symbol, timeframe);
+      console.warn("Activating local deterministic 5-Module SMC calculation:", err?.message);
+      const ec = freshQuantEval.executionCard;
+      const fib = freshQuantEval.fibonacci;
+      const st = freshQuantEval.smcStructure;
+      const isBull = freshQuantEval.directionalBias === "BULLISH";
+      const isBear = freshQuantEval.directionalBias === "BEARISH";
+      const primaryOb = freshQuantEval.overlays.orderBlocks[freshQuantEval.overlays.orderBlocks.length - 1];
+      const primaryFvg = freshQuantEval.overlays.fairValueGaps[freshQuantEval.overlays.fairValueGaps.length - 1];
 
-      const isBull = clientEval.directionalBias.startsWith("BULLISH");
       const localResult = {
+        engineMode: "DETERMINISTIC_QUANT_ENGINE",
+        modelUsed: "Local Mathematical SMC Engine",
+        engineNotice: "Network / API unavailable — synthesized deterministically from live OHLC candles.",
         imageQuality: {
           status: "passed",
-          details: "High-definition structural candle matrix analyzed. Real-time liquidity mapped.",
+          details: `Analyzed ${candles.length} live ${symbol.ticker} (${timeframe}) OHLC bars.`,
         },
-        bias: isBull ? "BULLISH" : clientEval.directionalBias.startsWith("BEARISH") ? "BEARISH" : "WAITING",
-        marketStructure: clientEval.smcStructure.htfStructure || "Confirmed Market Structure Shift (MSS) with displacement above liquidity range.",
-        confluenceScore: (clientEval.confluenceScorePct / 20).toFixed(1),
-        confluenceScorePct: clientEval.confluenceScorePct,
-        alignedModulesCount: clientEval.alignedModulesCount,
-        confluenceFormula: clientEval.confluenceFormulaBanner,
+        bias: isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL",
+        marketStructure: `${st.ltfStructure} · HTF: ${st.htfStructure}`,
+        confluenceScore: Number((freshQuantEval.confluenceScorePct / 20).toFixed(1)),
+        confluenceScorePct: freshQuantEval.confluenceScorePct,
+        alignedModulesCount: freshQuantEval.alignedModulesCount,
+        confluenceFormula: freshQuantEval.confluenceFormulaBanner,
         antiStopLossShield: {
-          status: "ACTIVE",
-          invalidationBuffer: clientEval.executionCard.atrBufferApplied,
-          sweepProtection: "Stop Loss positioned beyond displacement origin with volatility buffer to absorb spread probes.",
-          dealingRangeRule: "Orders restricted strictly to optimal zones (Discount for Longs, Premium for Shorts).",
+          structuralInvalidationPrice: ec.invalidationSL,
+          bufferPipsApplied: Number(Math.abs(ec.optimalEntry705 - ec.invalidationSL).toFixed(liveSpotPrice < 5 ? 4 : 2)),
+          protectionRationale: ec.atrBufferApplied,
+          dealingRangePosition:
+            fib.currentZone === "DISCOUNT"
+              ? "DISCOUNT_OTE"
+              : fib.currentZone === "PREMIUM"
+              ? "PREMIUM_OTE"
+              : "EQUILIBRIUM",
         },
+        killZone: {
+          status: st.killzoneActive ? "ACTIVE_NY" : "INACTIVE",
+          windowName: st.killzoneWindow,
+          details: st.killzoneActive ? "Institutional session active." : "Outside peak London/NY killzone.",
+        },
+        silverBullet: {
+          status: "INACTIVE",
+          windowName: "Silver Bullet Window Monitor",
+          details: "Monitor 03:00–04:00 EST / 10:00–11:00 EST for FVG sweeps.",
+        },
+        candleRangeTheory: {
+          rangeHigh: fib.swingHigh,
+          rangeLow: fib.swingLow,
+          sweepType: st.liquiditySweepDetected ? (isBull ? "LOW_SWEPT" : "HIGH_SWEPT") : "NONE",
+          deliveryDirection: isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL",
+          description: st.sweepDescription,
+        },
+        judasSwing: {
+          detected: st.liquiditySweepDetected,
+          direction: isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL",
+          triggerLevel: isBull ? st.sslPool : st.bslPool,
+          description: st.sweepDescription,
+        },
+        powerOf3: {
+          detected: Boolean(st.asianHigh && st.asianLow),
+          accumulationRange:
+            st.asianLow && st.asianHigh
+              ? `${formatPrice(st.asianLow, symbol)} – ${formatPrice(st.asianHigh, symbol)}`
+              : `${formatPrice(fib.swingLow, symbol)} – ${formatPrice(fib.equilibrium50, symbol)}`,
+          manipulationLevel: isBull ? st.asianLow || st.sslPool : st.asianHigh || st.bslPool,
+          distributionTarget: ec.tp2_1618,
+          description: "Accumulation-Manipulation-Distribution range mapped from live OHLC bars.",
+        },
+        multiTimeframe: {
+          isMultiTimeframe: true,
+          htfBias1D: `${freshQuantEval.mtfAlignment.d1.bias} — ${freshQuantEval.mtfAlignment.d1.structureEvent}`,
+          intermediateStructure4H: `${freshQuantEval.mtfAlignment.h4.bias} — ${freshQuantEval.mtfAlignment.h4.structureEvent}`,
+          entryPrecision30M: st.ltfStructure,
+          confirmationMessage: freshQuantEval.mtfAlignment.alignmentNote,
+        },
+        suggestedRisk: freshQuantEval.highProbabilityTrigger
+          ? "0.5% to 1.0% account risk. Bank 40% at TP1 and move SL to breakeven."
+          : "0% — WAIT. Confluence or asymmetric R:R gate not yet satisfied.",
+        doActions: freshQuantEval.highProbabilityTrigger
+          ? [
+              `Stage ${ec.orderType} at ${formatPrice(ec.optimalEntry705, symbol)} inside ${st.pdArrayType}.`,
+              `Bank 40% at TP1 (${formatPrice(ec.tp1_1272, symbol)}) and move SL to breakeven.`,
+            ]
+          : [
+              `Stand aside until >= 3/5 modules align and true R:R >= 1:2.0.`,
+              `Monitor ${isBull ? "Discount" : "Premium"} retracement toward ${formatPrice(fib.ote705SweetSpot, symbol)}.`,
+            ],
+        dontActions: [
+          "Do not chase mid-range price action in Equilibrium.",
+          "Do not move Stop Loss inside the structural sweep zone.",
+        ],
+        detailedVisualDescription: `Deterministic mathematical scan for ${symbol.name} (${timeframe}) at ${formatPrice(liveSpotPrice, symbol)}.`,
         orderBlock: {
-          type: isBull ? "BULLISH_OB" : "BEARISH_OB",
-          priceRange: `${clientEval.executionCard.entryZoneLow} - ${clientEval.executionCard.entryZoneHigh}`,
-          status: "UNMITIGATED",
+          priceRange: primaryOb
+            ? `${formatPrice(primaryOb.bottom, symbol)} – ${formatPrice(primaryOb.top, symbol)}`
+            : st.pdArrayZone,
+          type: primaryOb ? `${primaryOb.type.replace(/_/g, " ")} (${primaryOb.status})` : st.pdArrayType,
+          rationale: primaryOb
+            ? `Confirmed ${primaryOb.displacementAtrMultiple}× ATR displacement origin.`
+            : "Anchored to active dealing range OTE zone.",
         },
-        fairValueGap: {
-          presence: true,
-          gapRange: `${(activePrice * 0.998).toFixed(activePrice < 5 ? 4 : 2)} - ${(activePrice * 1.002).toFixed(activePrice < 5 ? 4 : 2)}`,
-          status: "OPEN",
+        supplyDemandZones: {
+          supply: `${formatPrice(fib.equilibrium50, symbol)} – ${formatPrice(fib.swingHigh, symbol)}`,
+          demand: `${formatPrice(fib.swingLow, symbol)} – ${formatPrice(fib.equilibrium50, symbol)}`,
+          activeZone: `${fib.currentZone} Zone`,
+        },
+        liquidityVoid: {
+          priceRange: primaryFvg
+            ? `${formatPrice(primaryFvg.bottom, symbol)} – ${formatPrice(primaryFvg.top, symbol)}`
+            : "None detected above 0.15× ATR",
+          description: primaryFvg
+            ? `${primaryFvg.type} FVG (${primaryFvg.status}) with 50% CE at ${formatPrice(primaryFvg.midpointCE, symbol)}.`
+            : "Price delivery currently balanced.",
+        },
+        candlestickPatterns: {
+          patternName: freshQuantEval.candlestickTrigger.patternName,
+          context: freshQuantEval.candlestickTrigger.details,
         },
         fibonacciRetracement: {
-          swingHigh: clientScan.swingHigh,
-          swingLow: clientScan.swingLow,
-          equilibrium: clientScan.equilibrium50,
-          oteZone: `${clientScan.ote705SweetSpot} (0.705 Sweet Spot)`,
-          deepDiscount: `${clientScan.ote786} (0.786 Extension)`,
+          level_50: fib.equilibrium50,
+          level_618: fib.ote618,
+          level_705: fib.ote705SweetSpot,
+          level_786: fib.ote786,
+          ext_1272: ec.tp1_1272,
+          ext_1618: ec.tp2_1618,
+          ext_2000: ec.tp3_2000,
+          description: fib.filterExplanation,
         },
         tradeSetup: {
-          type: clientEval.executionCard.orderType,
-          entry: clientEval.executionCard.optimalEntry705,
-          stopLoss: clientEval.executionCard.invalidationSL,
-          takeProfits: [
-            clientEval.executionCard.tp1_1272,
-            clientEval.executionCard.tp2_1618,
-            clientEval.executionCard.tp3_2000,
-          ],
-          riskRewardRatio: clientEval.executionCard.riskRewardRatio,
-          rationale: `5-Module SMC Confluence Score: ${clientEval.confluenceScorePct}%. Alignment: ${clientEval.alignedModulesCount}/5 modules verified. Entry positioned at 0.705 OTE with ${clientEval.executionCard.atrBufferApplied} volatility buffer.`,
+          type: ec.orderType === "BUY LIMIT" ? "BUY" : ec.orderType === "SELL LIMIT" ? "SELL" : "WAIT",
+          entry: ec.optimalEntry705,
+          stopLoss: ec.invalidationSL,
+          takeProfits: [ec.tp1_1272, ec.tp2_1618, ec.tp3_2000],
+          riskRewardRatio: ec.riskRewardRatio,
+          rationale: `${freshQuantEval.confluenceFormulaBanner}. ${freshQuantEval.mtfAlignment.alignmentNote}`,
         },
-        educationalInsight: `ICT Institutional Blueprint for ${symbol.name}: Institutional orders cluster at the 0.618-0.786 OTE pocket inside unmitigated Order Blocks. Protect capital by banking 50% at TP1 and shifting Stop Loss to breakeven immediately.`,
+        educationalInsight:
+          "Capital preservation requires standing aside whenever confluence drops below 3/5 modules or Risk:Reward falls under 1:2.0.",
       };
 
       setAnalysisResult(localResult);
@@ -1010,32 +1092,51 @@ export default function App() {
 
       {/* LIVE MARKET INGESTION TELEMETRY STRIP */}
       <div className="bg-[#E8EDF3] border-b border-slate-300 px-4 sm:px-6 lg:px-8 py-2">
-        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-semibold">
-              <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
-              <span>{telemetry.provider}</span>
-            </div>
-            <span className="text-[11px] font-mono text-slate-500">
-              Latency: <strong className="text-slate-800">{telemetry.latencyMs}ms</strong>
+        <div className="max-w-[1440px] mx-auto flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+          <div className="flex flex-wrap items-center gap-3 text-slate-700">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-800">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  telemetry.status === "CONNECTED"
+                    ? "bg-emerald-600"
+                    : telemetry.status === "ERROR"
+                    ? "bg-rose-600"
+                    : "bg-amber-500"
+                }`}
+              />
+              {telemetry.provider}
             </span>
-            <span className="text-slate-300 hidden sm:inline">·</span>
-            <span className="text-[11px] font-mono text-slate-600 hidden sm:inline">
-              Ticker: <strong className="text-slate-900">{symbol.ticker} ({timeframe})</strong>
+            <span className="text-slate-400">·</span>
+            <span className="text-[11px] text-slate-600 tabular-nums">
+              Latency <strong className="text-slate-900">{telemetry.latencyMs}ms</strong>
             </span>
-            <span className="text-slate-300 hidden sm:inline">·</span>
-            <span className="text-[11px] font-mono text-slate-600">
-              Spot: <strong className="text-emerald-700">{latestCandle ? formatPrice(latestCandle.close, symbol) : formatPrice(symbol.defaultPrice, symbol)}</strong>
+            <span className="text-slate-400 hidden sm:inline">·</span>
+            <span className="text-[11px] text-slate-600 hidden sm:inline">
+              <strong className="text-slate-900">{symbol.ticker}</strong> ({timeframe})
+            </span>
+            <span className="text-slate-400 hidden sm:inline">·</span>
+            <span className="text-[11px] text-slate-600 tabular-nums">
+              Spot{" "}
+              <strong className="text-emerald-700">
+                {latestCandle ? formatPrice(latestCandle.close, symbol) : formatPrice(symbol.defaultPrice, symbol)}
+              </strong>
             </span>
           </div>
 
           {symbol.marketType === "CRYPTO_PERP" && (futuresTelemetry || symbol.futuresMetrics) && (
-            <div className="flex items-center gap-2 font-mono text-[11px]">
-              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold">
+            <div className="flex items-center gap-3 text-[11px] tabular-nums">
+              <span className="text-emerald-800 font-semibold">
                 FR: {futuresTelemetry ? `${(futuresTelemetry.fundingRate * 100).toFixed(4)}%` : symbol.futuresMetrics?.fundingRate}
               </span>
-              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 border border-slate-200 font-semibold hidden md:inline">
+              <span className="text-slate-400 hidden md:inline">·</span>
+              <span className="text-slate-800 font-semibold hidden md:inline">
                 OI: {futuresTelemetry && futuresTelemetry.openInterestValue > 0 ? `$${(futuresTelemetry.openInterestValue / 1e9).toFixed(2)}B` : symbol.futuresMetrics?.openInterestUsd}
+                {futuresTelemetry?.oiDeltaPct24h !== undefined && (
+                  <span className={futuresTelemetry.oiDeltaPct24h >= 0 ? "text-emerald-700 ml-1" : "text-rose-600 ml-1"}>
+                    ({futuresTelemetry.oiDeltaPct24h > 0 ? "+" : ""}
+                    {futuresTelemetry.oiDeltaPct24h}%)
+                  </span>
+                )}
               </span>
             </div>
           )}
@@ -1477,47 +1578,21 @@ export default function App() {
               </div>
             </div>
 
-            {/* RIGHT MAIN WORKSPACE: 5-MODULE QUANT ENGINE, LIVE TERMINAL, PINE SCRIPT & VISION */}
+            {/* RIGHT MAIN WORKSPACE: UNIFIED LIVE CHART + 5-MODULE QUANT ENGINE + HYBRID AI REPORT */}
             <div className="lg:col-span-8 space-y-5">
               {/* Workspace Mode Navigation */}
-              <div className="bg-[#F1F4F8] border border-slate-300/80 rounded-xl p-1.5 flex flex-wrap items-center gap-1 shadow-2xs">
+              <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-1.5 flex flex-wrap items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setAnalyzerSubTab("quant_engine")}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    analyzerSubTab === "quant_engine"
-                      ? "bg-emerald-600 text-white shadow-2xs"
+                    analyzerSubTab === "quant_engine" || analyzerSubTab === "live_feed"
+                      ? "bg-emerald-600 text-white"
                       : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
                   }`}
                 >
                   <Activity className="h-3.5 w-3.5" />
-                  <span>5-Module Quant Engine</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAnalyzerSubTab("live_feed")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    analyzerSubTab === "live_feed"
-                      ? "bg-emerald-600 text-white shadow-2xs"
-                      : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
-                  }`}
-                >
-                  <TrendingUp className="h-3.5 w-3.5" />
-                  <span>Live Deriv Stream</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setAnalyzerSubTab("pine_script")}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    analyzerSubTab === "pine_script"
-                      ? "bg-emerald-600 text-white shadow-2xs"
-                      : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
-                  }`}
-                >
-                  <Code className="h-3.5 w-3.5" />
-                  <span>Pine Script v5</span>
+                  <span>Live Chart &amp; Quant Engine</span>
                 </button>
 
                 <button
@@ -1525,12 +1600,30 @@ export default function App() {
                   onClick={() => setAnalyzerSubTab("analysis")}
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                     analyzerSubTab === "analysis"
-                      ? "bg-emerald-600 text-white shadow-2xs"
+                      ? "bg-emerald-600 text-white"
                       : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
                   }`}
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>AI Vision Output</span>
+                  <span>Hybrid AI Report</span>
+                  {analysisResult && (
+                    <span className="font-mono text-[10px] opacity-90">
+                      ({analysisResult.tradeSetup?.type || "READY"})
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAnalyzerSubTab("pine_script")}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    analyzerSubTab === "pine_script"
+                      ? "bg-emerald-600 text-white"
+                      : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
+                  }`}
+                >
+                  <Code className="h-3.5 w-3.5" />
+                  <span>Pine Script v5</span>
                 </button>
 
                 {(imagePreview || isMtfMode) && (
@@ -1539,7 +1632,7 @@ export default function App() {
                     onClick={() => setAnalyzerSubTab("drawing")}
                     className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       analyzerSubTab === "drawing"
-                        ? "bg-emerald-600 text-white shadow-2xs"
+                        ? "bg-emerald-600 text-white"
                         : "text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB]"
                     }`}
                   >
@@ -1549,51 +1642,52 @@ export default function App() {
                 )}
               </div>
 
-              {/* SUB-TAB 1: 5-MODULE QUANTITATIVE ENGINE */}
-              {analyzerSubTab === "quant_engine" && (
-                <QuantAnalyzerPanel
-                  symbol={symbol}
-                  timeframe={timeframe}
-                  onSyncLevelsToWorkspace={(levels) => {
-                    setActiveLevels({
-                      entry: levels.entry,
-                      stopLoss: levels.stopLoss,
-                      tp1: levels.tp1,
-                      tp2: levels.tp2,
-                    });
-                    setActiveTab("calculator");
-                  }}
-                />
+              {/* UNIFIED WORKSPACE: LIVE INTERACTIVE SMC CHART + 5-MODULE QUANT ENGINE */}
+              {(analyzerSubTab === "quant_engine" || analyzerSubTab === "live_feed") && (
+                <div className="space-y-5">
+                  <LiveTradingViewChart
+                    symbol={symbol}
+                    timeframe={timeframe}
+                    analysisResult={analysisResult}
+                    quantEvaluation={liveQuantEvaluation}
+                    currentWorkspaceLevels={activeLevels}
+                    onSyncLevels={(levels) => {
+                      setActiveLevels(levels);
+                      setActiveTab("calculator");
+                    }}
+                    onCaptureScreenshot={(dataUrl) => {
+                      setImagePreview(dataUrl);
+                      setOriginalImage(dataUrl);
+                      startSMCAnalysis(dataUrl);
+                    }}
+                    onDivergencesDetected={(divs) => setLiveDivergences(divs)}
+                  />
+
+                  <QuantAnalyzerPanel
+                    symbol={symbol}
+                    timeframe={timeframe}
+                    aiAnalysisResult={analysisResult}
+                    onEvaluationChange={(ev) => setLiveQuantEvaluation(ev)}
+                    onSyncLevelsToWorkspace={(levels) => {
+                      setActiveLevels(levels);
+                      setActiveTab("calculator");
+                    }}
+                  />
+                </div>
               )}
 
-              {/* SUB-TAB 2: LIVE TRADINGVIEW / DERIV FEED */}
-              {analyzerSubTab === "live_feed" && (
-                <LiveTradingViewChart
-                  symbol={symbol}
-                  timeframe={timeframe}
-                  analysisResult={analysisResult}
-                  currentWorkspaceLevels={activeLevels}
-                  onSyncLevels={(levels) => setActiveLevels(levels)}
-                  onCaptureScreenshot={(dataUrl) => {
-                    setImagePreview(dataUrl);
-                    setOriginalImage(dataUrl);
-                    startSMCAnalysis(dataUrl);
-                  }}
-                />
-              )}
-
-              {/* SUB-TAB 3: PINE SCRIPT GENERATOR */}
+              {/* PINE SCRIPT GENERATOR */}
               {analyzerSubTab === "pine_script" && <PineScriptGenerator />}
 
-              {/* SUB-TAB 4: INTERACTIVE CHART MARKUP CANVAS */}
+              {/* INTERACTIVE CHART MARKUP CANVAS */}
               {analyzerSubTab === "drawing" && (
-                <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
+                <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-5 space-y-4">
                   {isMtfMode && (
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <div className="flex items-center justify-between border-b border-slate-300 pb-3">
                       <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                         Select Timeframe Canvas
                       </span>
-                      <div className="flex gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200">
+                      <div className="flex gap-1 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
                         {(["d1", "h4", "m30"] as const).map((k) => (
                           <button
                             key={k}
@@ -1601,7 +1695,7 @@ export default function App() {
                             className={`px-3 py-1 rounded text-xs font-mono font-bold uppercase cursor-pointer ${
                               selectedMtfView === k
                                 ? "bg-emerald-600 text-white"
-                                : "text-slate-600 hover:text-slate-900"
+                                : "text-slate-700 hover:text-slate-900"
                             }`}
                           >
                             {k}
@@ -1617,9 +1711,8 @@ export default function App() {
                       : originalImage;
                     if (!activeImg) {
                       return (
-                        <div className="py-12 text-center text-slate-500 text-sm">
-                          Upload a chart image from the left panel to annotate
-                          liquidity zones and order blocks.
+                        <div className="py-12 text-center text-slate-600 text-sm">
+                          Upload a chart image from the left panel or snapshot the live chart to annotate liquidity zones and order blocks.
                         </div>
                       );
                     }
@@ -1637,302 +1730,109 @@ export default function App() {
                 </div>
               )}
 
-              {/* SUB-TAB 5: AI VISION OUTPUT */}
+              {/* HYBRID AI + QUANT REPORT VIEW */}
               {analyzerSubTab === "analysis" && (
-                <div>
+                <div className="space-y-5">
                   {isAnalyzing ? (
-                    <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-4">
-                      <div className="h-12 w-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
+                    <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-12 text-center space-y-4">
+                      <div className="h-12 w-12 rounded-full bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-600">
                         <Loader2 className="h-6 w-6 animate-spin" />
                       </div>
                       <h3 className="text-base font-bold font-display text-slate-900">
-                        Executing Institutional Vision Scan
+                        Running Hybrid Quantitative + Vision AI Scan
                       </h3>
-                      <p className="text-xs font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 inline-block px-3 py-1.5 rounded-md">
+                      <p className="text-xs font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 inline-block px-3 py-1.5 rounded-md">
                         {analysisProgress}
                       </p>
                     </div>
                   ) : !analysisResult ? (
-                    <div className="bg-white border border-slate-200 rounded-xl p-10 text-center space-y-4">
-                      <div className="h-12 w-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center mx-auto text-emerald-600">
+                    <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-10 text-center space-y-4">
+                      <div className="h-12 w-12 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-600">
                         <Sparkles className="h-6 w-6" />
                       </div>
-                      <div className="max-w-md mx-auto space-y-1.5">
+                      <div className="max-w-md mx-auto space-y-2">
                         <h3 className="text-base font-bold font-display text-slate-900">
-                          No Screenshot Scanned Yet
+                          Ready for Hybrid Quant + Vision Scan
                         </h3>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Upload a chart screenshot on the left panel or capture
-                          a snapshot directly from the{" "}
-                          <button
-                            type="button"
-                            onClick={() => setAnalyzerSubTab("live_feed")}
-                            className="text-emerald-700 font-semibold underline cursor-pointer"
-                          >
-                            Live Deriv Stream
-                          </button>{" "}
-                          to run AI computer-vision SMC structure detection.
+                          Click <strong>Analyze {symbol.ticker}</strong> on the left panel to synthesize live 300-bar OHLC mathematics (1D/4H MTF, Order Blocks, FVGs, SMT, OI/CVD) with Gemini 4 Vision.
                         </p>
+                        <button
+                          type="button"
+                          onClick={() => startSMCAnalysis()}
+                          className="mt-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
+                        >
+                          Run Instant Hybrid Scan on {symbol.ticker}
+                        </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="space-y-5 relative">
-                      {/* Action Header */}
-                      <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl p-4">
-                        <div>
-                          <span className="text-[10px] font-mono uppercase tracking-widest px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">
-                            AI Vision Matrix Output
-                          </span>
-                          <h2 className="text-lg font-bold font-display text-slate-900 mt-1">
-                            {customSymbolText ? customSymbolText : symbol.name}{" "}
-                            ({timeframe})
-                          </h2>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleExportSMCJson}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-200 transition-colors cursor-pointer"
-                          >
-                            <Download className="h-3.5 w-3.5 text-slate-600" />
-                            <span>Export JSON</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setIsQuickNoteOpen(true)}
-                            className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors cursor-pointer"
-                          >
-                            <MessageSquare className="h-3.5 w-3.5" />
-                            <span>Quick Note</span>
-                          </button>
-                        </div>
-                      </div>
+                    <div className="space-y-5">
+                      <VisionReportView
+                        analysis={analysisResult}
+                        symbol={symbol}
+                        timeframe={timeframe}
+                        onSyncLevels={(levels) => {
+                          setActiveLevels(levels);
+                          setActiveTab("calculator");
+                        }}
+                        onDownloadPDF={() => {
+                          exportTradeToPDF({
+                            id: `scan-${Date.now()}`,
+                            symbol: customSymbolText || symbol.ticker,
+                            timeframe,
+                            bias: analysisResult.bias || "NEUTRAL",
+                            entry_price: Number(analysisResult.tradeSetup?.entry) || 0,
+                            stop_loss: Number(analysisResult.tradeSetup?.stopLoss) || 0,
+                            take_profit: Number(analysisResult.tradeSetup?.takeProfits?.[0]) || 0,
+                            risk_reward: analysisResult.tradeSetup?.riskRewardRatio || "N/A",
+                            image_url: imagePreview || "",
+                            notes: tradeNotes || analysisResult.tradeSetup?.rationale || "",
+                            status: "PENDING",
+                            created_at: new Date().toISOString(),
+                            analysis_info: analysisResult,
+                          });
+                        }}
+                      />
 
-                      {/* Multi-Timeframe Breakdown */}
-                      {analysisResult.multiTimeframe && (
-                        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">
-                            Top-Down Multi-Timeframe Alignment
-                          </h3>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg space-y-1.5">
-                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700">
-                                1D Macro Trend
-                              </span>
-                              <p className="text-xs text-slate-700 leading-relaxed">
-                                {analysisResult.multiTimeframe.trend1D}
-                              </p>
-                            </div>
-                            <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg space-y-1.5">
-                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700">
-                                4H Structural Zone
-                              </span>
-                              <p className="text-xs text-slate-700 leading-relaxed">
-                                {
-                                  analysisResult.multiTimeframe
-                                    .intermediateZone4H
-                                }
-                              </p>
-                            </div>
-                            <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg space-y-1.5">
-                              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-700">
-                                30M Entry Trigger
-                              </span>
-                              <p className="text-xs text-slate-700 leading-relaxed">
-                                {
-                                  analysisResult.multiTimeframe
-                                    .entryPrecision30M
-                                }
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Execution Plan Card */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-5">
-                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                          <h3 className="text-sm font-bold font-display text-slate-900">
-                            Institutional Trade Execution Plan
-                          </h3>
-                          <span
-                            className={`px-3 py-1 rounded-md text-xs font-mono font-bold uppercase border ${
-                              analysisResult?.bias === "BULLISH"
-                                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                                : analysisResult?.bias === "BEARISH"
-                                  ? "bg-red-50 border-red-200 text-red-700"
-                                  : "bg-slate-100 border-slate-200 text-slate-700"
-                            }`}
-                          >
-                            {analysisResult?.bias || "NEUTRAL"} BIAS
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg border-l-4 border-l-emerald-600">
-                            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
-                              Entry Price
-                            </p>
-                            <p className="text-lg font-mono font-bold text-slate-900 mt-1 tabular-nums">
-                              {analysisResult?.tradeSetup?.entry?.toLocaleString(
-                                undefined,
-                                { minimumFractionDigits: 2 }
-                              ) || "N/A"}
-                            </p>
-                            <p className="text-[11px] text-emerald-700 font-medium mt-1">
-                              {analysisResult?.tradeSetup?.type || "LIMIT"}{" "}
-                              Order
-                            </p>
-                          </div>
-
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg border-l-4 border-l-red-600">
-                            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
-                              Invalidation Stop Loss
-                            </p>
-                            <p className="text-lg font-mono font-bold text-slate-900 mt-1 tabular-nums">
-                              {analysisResult?.tradeSetup?.stopLoss?.toLocaleString(
-                                undefined,
-                                { minimumFractionDigits: 2 }
-                              ) || "N/A"}
-                            </p>
-                            <p className="text-[11px] text-red-600 font-medium mt-1">
-                              Distance:{" "}
-                              {Math.abs(
-                                (analysisResult?.tradeSetup?.entry || 0) -
-                                  (analysisResult?.tradeSetup?.stopLoss || 0)
-                              ).toFixed(2)}{" "}
-                              pts
-                            </p>
-                          </div>
-
-                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg border-l-4 border-l-emerald-500">
-                            <p className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-semibold">
-                              Risk-to-Reward Ratio
-                            </p>
-                            <p className="text-lg font-mono font-bold text-slate-900 mt-1 tabular-nums">
-                              {analysisResult?.tradeSetup?.riskRewardRatio ||
-                                "1:3"}
-                            </p>
-                            <p className="text-[11px] text-slate-600 font-medium mt-1">
-                              Asymmetric Target Profile
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Take Profit Targets */}
-                        {analysisResult?.tradeSetup?.takeProfits && (
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                            {analysisResult.tradeSetup.takeProfits.map(
-                              (tp: number, idx: number) => (
-                                <div
-                                  key={idx}
-                                  className="p-3 rounded-lg bg-emerald-50/50 border border-emerald-200 flex items-center justify-between"
-                                >
-                                  <span className="text-xs font-semibold text-emerald-900">
-                                    Take Profit {idx + 1}
-                                  </span>
-                                  <span className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
-                                    {tp?.toLocaleString(undefined, {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                  </span>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )}
-
-                        <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed">
-                          <strong className="text-slate-900 block mb-1">
-                            Execution Rationale:
-                          </strong>
-                          {analysisResult?.tradeSetup?.rationale ||
-                            "Wait for structural confirmation inside the designated POI."}
-                        </div>
-                      </div>
-
-                      {/* Order Block, Supply/Demand & Fibonacci Grid */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
+                      {/* Export JSON + Quick Note + Save to Trade Journal */}
+                      <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-5 space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-3">
                           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">
-                            Institutional Order Block
+                            Log Setup to Institutional Trade Journal
                           </h4>
-                          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">Price Zone</span>
-                              <span className="font-mono font-bold text-emerald-700">
-                                {analysisResult?.orderBlock?.priceRange ||
-                                  "N/A"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2">
-                              <span className="text-slate-500">
-                                Classification
-                              </span>
-                              <span className="font-semibold text-slate-900">
-                                {analysisResult?.orderBlock?.type || "N/A"}
-                              </span>
-                            </div>
-                            <p className="text-slate-600 pt-2 border-t border-slate-200 leading-relaxed">
-                              {analysisResult?.orderBlock?.rationale || "N/A"}
-                            </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleExportSMCJson}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E8ECF2] hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-300 transition-colors cursor-pointer"
+                            >
+                              <Download className="h-3.5 w-3.5 text-slate-600" />
+                              <span>Export JSON</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsQuickNoteOpen(true)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#E8ECF2] hover:bg-slate-200 text-slate-800 text-xs font-semibold border border-slate-300 transition-colors cursor-pointer"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5 text-emerald-600" />
+                              <span>Quick Note</span>
+                            </button>
                           </div>
                         </div>
 
-                        <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-3">
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">
-                            Supply & Demand Zones
-                          </h4>
-                          <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 space-y-2 text-xs">
-                            <div className="flex justify-between">
-                              <span className="text-slate-500">
-                                Supply Zone
-                              </span>
-                              <span className="font-mono font-bold text-red-600">
-                                {analysisResult?.supplyDemandZones?.supply ||
-                                  "N/A"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2">
-                              <span className="text-slate-500">
-                                Demand Zone
-                              </span>
-                              <span className="font-mono font-bold text-emerald-700">
-                                {analysisResult?.supplyDemandZones?.demand ||
-                                  "N/A"}
-                              </span>
-                            </div>
-                            <div className="flex justify-between border-t border-slate-200 pt-2">
-                              <span className="text-slate-500">
-                                Active Control
-                              </span>
-                              <span className="font-semibold text-slate-900">
-                                {analysisResult?.supplyDemandZones
-                                  ?.activeZone || "Equilibrium"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Save to Journal */}
-                      <div className="bg-white border border-slate-200 rounded-xl p-5 space-y-4">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">
-                          Log Setup to Trade Journal
-                        </h4>
                         <textarea
                           value={tradeNotes}
                           onChange={(e) => setTradeNotes(e.target.value)}
                           placeholder="Add execution notes, session timing, or confluence observations..."
                           rows={2}
-                          className="w-full bg-slate-50 border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-lg p-3 text-xs text-slate-900 focus:outline-none"
+                          className="w-full bg-[#E8ECF2] border border-slate-300 focus:border-emerald-600 rounded-lg p-3 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none"
                         />
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-slate-600">
                             {journalSaveStatus === "saved" && (
                               <span className="text-emerald-700 font-semibold flex items-center gap-1">
-                                <Check className="h-4 w-4" /> Saved to Trade
-                                Journal
+                                <Check className="h-4 w-4" /> Saved to Trade Journal
                               </span>
                             )}
                           </span>
