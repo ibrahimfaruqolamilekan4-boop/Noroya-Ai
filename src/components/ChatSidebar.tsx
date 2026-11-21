@@ -362,7 +362,7 @@ export default function ChatSidebar({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
                   <GraduationCap className="h-4 w-4 text-emerald-600" />
-                  <span>Quick Institutional Prompts</span>
+                  <span>Quick Trading Prompts</span>
                 </div>
 
                 <label className="relative inline-flex items-center cursor-pointer select-none">
@@ -385,7 +385,7 @@ export default function ChatSidebar({
                     onClick={() =>
                       handleSendMessage(
                         undefined,
-                        "How do I prevent my Stop Loss from getting swept on Forex & Gold?"
+                        "How do I place a safe Stop Loss so I don't get wicked out early?"
                       )
                     }
                     className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
@@ -396,23 +396,23 @@ export default function ChatSidebar({
                     onClick={() =>
                       handleSendMessage(
                         undefined,
-                        "Explain London Judas Swing manipulation and Asian liquidity sweeps"
+                        "When should I pick a Scalp Setup (5-45m) vs a Normal Trade Setup (2-24h)?"
                       )
                     }
                     className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
                   >
-                    London Judas Swing
+                    Scalp vs Normal Trade
                   </button>
                   <button
                     onClick={() =>
                       handleSendMessage(
                         undefined,
-                        "Explain what a Fair Value Gap (FVG) represents and how to enter on OTE 0.705"
+                        "How do I enter cleanly on a pullback to support or resistance without chasing?"
                       )
                     }
                     className="px-2.5 py-1 bg-[#F8FAF9] border border-slate-200 hover:border-emerald-600 text-[11px] text-slate-700 hover:text-emerald-700 font-medium rounded-md transition cursor-pointer"
                   >
-                    FVG &amp; 0.705 OTE Entry
+                    Pullback Entry Rules
                   </button>
                 </div>
               )}

@@ -21,12 +21,15 @@ import {
   getNextFundingCountdown,
   QuantitativeEvaluation,
   StructuralScanResult,
+  TradingStyle,
 } from "../lib/quantEngine";
 import { useMarketData } from "../hooks/useMarketData";
 
 interface QuantAnalyzerPanelProps {
   symbol: SyntheticSymbol;
   timeframe: string;
+  tradingStyle?: TradingStyle;
+  onTradingStyleChange?: (style: TradingStyle) => void;
   aiAnalysisResult?: any;
   onEvaluationChange?: (evaluation: QuantitativeEvaluation) => void;
   onSyncLevelsToWorkspace?: (levels: {
@@ -40,13 +43,14 @@ interface QuantAnalyzerPanelProps {
 export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
   symbol,
   timeframe,
+  tradingStyle = "NORMAL" as TradingStyle,
+  onTradingStyleChange,
   aiAnalysisResult,
   onEvaluationChange,
   onSyncLevelsToWorkspace,
 }) => {
   const [fundingCountdown, setFundingCountdown] = useState<string>(getNextFundingCountdown());
 
-  // Shared real-time market data + real D1/H4 MTF + real paired SMT reference
   const { candles, latestCandle, futuresTelemetry, telemetry, mtfCandles, isMtfLoading, smtReference } =
     useMarketData(symbol, timeframe);
 
@@ -57,12 +61,10 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Tier 1: True Mathematical Structural Scan (5-bar fractals, BOS/CHoCH, OB, FVG, PDH/PDL, MTF, SMT)
   const structural: StructuralScanResult = useMemo(() => {
     return evaluateStructuralScan(candles, symbol, timeframe, aiAnalysisResult, mtfCandles, smtReference);
   }, [candles, symbol.ticker, timeframe, aiAnalysisResult, mtfCandles, smtReference]);
 
-  // Tier 2: Intra-candle tick evaluation (zero repainting, honest R:R & WAIT gate)
   const evaluation: QuantitativeEvaluation = useMemo(() => {
     const fallbackPrice = latestCandle?.close || structural.optimalEntry;
     const currentLiveCandle = latestCandle || {
@@ -75,8 +77,8 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
       isClosed: false,
     };
 
-    return evaluateLiveTick(currentLiveCandle, structural, futuresTelemetry);
-  }, [latestCandle, structural, futuresTelemetry]);
+    return evaluateLiveTick(currentLiveCandle, structural, futuresTelemetry, tradingStyle);
+  }, [latestCandle, structural, futuresTelemetry, tradingStyle]);
 
   useEffect(() => {
     onEvaluationChange?.(evaluation);
@@ -84,20 +86,21 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
   const isBullish = evaluation.directionalBias === "BULLISH";
   const isBearish = evaluation.directionalBias === "BEARISH";
+  const isScalp = tradingStyle === "SCALP";
   const fm = futuresTelemetry || symbol.futuresMetrics;
   const sm = evaluation.syntheticMetrics;
 
   return (
     <div className="space-y-5 text-slate-900">
-      {/* REAL TOP-DOWN MTF ALIGNMENT STRIP (1D / 4H / ACTIVE TF) */}
+      {/* LIVE TREND CHECK STRIP (1D / 4H / ACTIVE TF) */}
       <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2 font-semibold text-slate-900">
             <Layers className="h-4 w-4 text-emerald-600" />
-            <span>Live Multi-Timeframe Structural Alignment</span>
+            <span>Live Trend Direction Check</span>
           </div>
           <span className="font-mono text-slate-600">
-            {isMtfLoading ? "Fetching 1D & 4H feeds..." : evaluation.mtfAlignment.alignmentNote}
+            {isMtfLoading ? "Loading 1D & 4H trend..." : evaluation.mtfAlignment.alignmentNote}
           </span>
         </div>
 
@@ -117,7 +120,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                 >
                   <div>
                     <span className="text-[10px] font-mono uppercase text-slate-500 block font-semibold">
-                      {tfItem.timeframe} Structure ({tfItem.candleCount} bars)
+                      {tfItem.timeframe} Trend ({tfItem.candleCount} bars)
                     </span>
                     <span className="text-slate-800 font-medium block mt-0.5">{tfItem.structureEvent}</span>
                   </div>
@@ -129,14 +132,243 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
         </div>
       </div>
 
-      {/* ASSET-SPECIFIC QUANTITATIVE MICROSTRUCTURE TELEMETRY */}
+      {/* LIVE TRADE SETUP CARD (SCALP vs NORMAL TRADE SWITCHER) */}
+      <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-6 space-y-5">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-300 pb-4">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+              <span className="font-semibold text-slate-800">
+                {evaluation.executionCard.styleLabel}
+              </span>
+              <span>·</span>
+              <span className="font-mono text-slate-800 font-semibold">
+                {symbol.ticker} ({timeframe})
+              </span>
+              <span>·</span>
+              <span>Est. Hold: {evaluation.executionCard.holdTime}</span>
+              <span>·</span>
+              <span>{evaluation.alignedModulesCount} of 5 Checks Passed</span>
+            </div>
+            <h2 className="text-xl font-bold font-display text-slate-900 flex items-center gap-2.5">
+              {isBullish ? (
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              ) : isBearish ? (
+                <TrendingDown className="h-5 w-5 text-rose-600" />
+              ) : (
+                <AlertTriangle className="h-5 w-5 text-amber-600" />
+              )}
+              <span>
+                {isScalp ? "Scalp Signal:" : "Normal Trade Signal:"}{" "}
+                <span
+                  className={
+                    isBullish ? "text-emerald-700" : isBearish ? "text-rose-600" : "text-amber-700"
+                  }
+                >
+                  {evaluation.executionCard.orderType} ({evaluation.directionalBias})
+                </span>
+              </span>
+            </h2>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            {onTradingStyleChange && (
+              <div className="grid grid-cols-2 gap-1 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
+                <button
+                  type="button"
+                  onClick={() => onTradingStyleChange("SCALP")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    isScalp
+                      ? "bg-emerald-600 text-white"
+                      : "text-slate-700 hover:text-slate-900"
+                  }`}
+                >
+                  Scalp Setup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onTradingStyleChange("NORMAL")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    !isScalp
+                      ? "bg-emerald-600 text-white"
+                      : "text-slate-700 hover:text-slate-900"
+                  }`}
+                >
+                  Normal Trade
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 bg-[#E8ECF2] border border-slate-300 rounded-xl px-4 py-2.5">
+              <div>
+                <div className="text-[10px] text-slate-500">Setup Score</div>
+                <div
+                  className={`text-xl font-mono font-bold tabular-nums ${
+                    evaluation.highProbabilityTrigger ? "text-emerald-700" : "text-amber-700"
+                  }`}
+                >
+                  {evaluation.confluenceScorePct}%
+                </div>
+              </div>
+              <div className="h-7 w-px bg-slate-300" />
+              <div>
+                <div className="text-[10px] text-slate-500">Status</div>
+                <div
+                  className={`text-xs font-semibold ${
+                    evaluation.highProbabilityTrigger ? "text-emerald-700" : "text-amber-700"
+                  }`}
+                >
+                  {evaluation.highProbabilityTrigger ? "Setup Ready" : "Wait for Setup"}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Formula Summary Banner */}
+        <div
+          className={`rounded-lg border p-3.5 text-xs font-mono flex items-center justify-between gap-4 ${
+            evaluation.highProbabilityTrigger
+              ? "bg-emerald-50/70 border-emerald-300 text-emerald-950"
+              : "bg-amber-50/70 border-amber-300 text-amber-950"
+          }`}
+        >
+          <span>{evaluation.confluenceFormulaBanner}</span>
+          <span className="font-bold shrink-0 tabular-nums">
+            Risk:Reward {evaluation.executionCard.riskRewardRatio}
+          </span>
+        </div>
+
+        {/* Trade Levels Strip */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>{isScalp ? "Scalp Entry Zone" : "Normal Entry Zone"}</span>
+              <Target className="h-3.5 w-3.5 text-emerald-600" />
+            </div>
+            <div className="text-sm font-mono font-bold text-slate-900 tabular-nums">
+              {formatPrice(evaluation.executionCard.entryZoneLow, symbol)} –{" "}
+              {formatPrice(evaluation.executionCard.entryZoneHigh, symbol)}
+            </div>
+            <div className="text-[11px] text-emerald-700 font-mono font-semibold tabular-nums">
+              Best Entry: {formatPrice(evaluation.executionCard.optimalEntry705, symbol)}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-rose-50/50 border border-rose-300 space-y-1">
+            <div className="flex items-center justify-between text-xs text-rose-700">
+              <span>{isScalp ? "Tight Scalp SL" : "Safe Swing SL"}</span>
+              <Shield className="h-3.5 w-3.5 text-rose-600" />
+            </div>
+            <div className="text-sm font-mono font-bold text-rose-700 tabular-nums">
+              {formatPrice(evaluation.executionCard.invalidationSL, symbol)}
+            </div>
+            <div className="text-[11px] text-slate-600 leading-tight">
+              {evaluation.executionCard.atrBufferApplied}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
+            <div className="text-xs text-slate-500">
+              TP1 ({isScalp ? "Quick 1.2R" : "Partial 1.5R"})
+            </div>
+            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
+              {formatPrice(evaluation.executionCard.tp1_1272, symbol)}
+            </div>
+            <div className="text-[11px] text-slate-500">
+              {isScalp ? "Take 50% & move SL to BE" : "Take 40% & move SL to BE"}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-300 space-y-1">
+            <div className="text-xs text-emerald-800 font-medium">
+              TP2 ({isScalp ? "Main 1.8R" : "Main 2.5R"})
+            </div>
+            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
+              {formatPrice(evaluation.executionCard.tp2_1618, symbol)}
+            </div>
+            <div className="text-[11px] text-emerald-800/80">Primary profit target</div>
+          </div>
+
+          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
+            <div className="text-xs text-slate-500">
+              TP3 ({isScalp ? "Runner 2.5R" : "Swing 3.5R"})
+            </div>
+            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
+              {formatPrice(evaluation.executionCard.tp3_2000, symbol)}
+            </div>
+            <div className="text-[11px] text-slate-500">Extended runner target</div>
+          </div>
+        </div>
+
+        {/* Quick Side-by-Side Comparison: Scalp vs Normal */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono tabular-nums">
+          {(["scalp", "normal"] as const).map((key) => {
+            const p = evaluation.tradePlans[key];
+            const isSelected = (key === "scalp" && isScalp) || (key === "normal" && !isScalp);
+            return (
+              <div
+                key={key}
+                onClick={() => onTradingStyleChange?.(p.style)}
+                className={`p-3 rounded-lg border transition-colors cursor-pointer ${
+                  isSelected
+                    ? "bg-emerald-50/60 border-emerald-400"
+                    : "bg-[#E8ECF2] border-slate-300 hover:border-slate-400"
+                }`}
+              >
+                <div className="flex items-center justify-between font-sans mb-1.5">
+                  <span className="font-bold text-slate-900">{p.label}</span>
+                  <span className="text-[11px] font-mono text-slate-600">{p.holdTime}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                  <span>
+                    Entry: <strong className="text-slate-900">{formatPrice(p.entry, symbol)}</strong>
+                  </span>
+                  <span>
+                    SL: <strong className="text-rose-700">{formatPrice(p.stopLoss, symbol)}</strong>
+                  </span>
+                  <span>
+                    TP2: <strong className="text-emerald-700">{formatPrice(p.tp2, symbol)}</strong>
+                  </span>
+                  <span className="text-emerald-800 font-semibold">{p.riskRewardRatio}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-300 text-xs">
+          <span className="text-slate-600">
+            Action:{" "}
+            <strong className="text-slate-900 font-mono">{evaluation.executionCard.orderType}</strong> ·{" "}
+            {telemetry.activeCandleCount} live candles loaded
+          </span>
+          {onSyncLevelsToWorkspace && (
+            <button
+              type="button"
+              onClick={() =>
+                onSyncLevelsToWorkspace({
+                  entry: evaluation.executionCard.optimalEntry705,
+                  stopLoss: evaluation.executionCard.invalidationSL,
+                  tp1: evaluation.executionCard.tp1_1272,
+                  tp2: evaluation.executionCard.tp2_1618,
+                })
+              }
+              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Send Levels to Risk Sizer &amp; Chart
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ASSET-SPECIFIC LIVE TELEMETRY */}
       {symbol.marketType === "CRYPTO_PERP" && fm && (
         <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-3">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-bold font-display text-slate-900">
-                Bybit V5 Perpetual Orderflow (OI Δ, Funding &amp; Live Tape CVD)
+                Crypto Futures Momentum (Funding, Open Interest &amp; Live Pressure)
               </h3>
             </div>
             <div className="text-xs text-slate-600 font-mono tabular-nums">
@@ -166,14 +398,14 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
                 {(futuresTelemetry?.fundingRate ?? 0) < 0
-                  ? "Negative funding: crowded shorts vulnerable to upside squeeze."
-                  : "Positive funding: require SSL flush before long execution."}
+                  ? "Negative funding — shorts crowded, watch for upside bounce."
+                  : "Positive funding — wait for clean dips before buying."}
               </p>
             </div>
 
             <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>Open Interest &amp; 24h Δ</span>
+                <span>Open Interest &amp; 24h Change</span>
                 <BarChart3 className="h-3.5 w-3.5 text-emerald-600" />
               </div>
               <div className="mt-1.5 flex items-baseline justify-between">
@@ -200,7 +432,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
             <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <div className="flex items-center justify-between text-xs text-slate-600">
-                <span>Real-Time Tape CVD Bias</span>
+                <span>Live Buying / Selling Pressure</span>
                 <Zap className="h-3.5 w-3.5 text-emerald-600" />
               </div>
               <div className="mt-1.5">
@@ -217,7 +449,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                 </span>
               </div>
               <p className="mt-1 text-[11px] text-slate-600">
-                Derived directly from live Bybit publicTrade buy/sell aggressive market orders.
+                Calculated from live market buy vs. sell orders.
               </p>
             </div>
           </div>
@@ -230,16 +462,16 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
             <div className="flex items-center gap-2">
               <Activity className="h-4 w-4 text-emerald-600" />
               <h3 className="text-sm font-bold font-display text-slate-900">
-                Deriv 24/7 Quantitative Z-Score &amp; Spike Telemetry
+                Synthetic Volatility &amp; Spike Monitor
               </h3>
             </div>
             <span className="text-xs font-mono text-slate-600">
-              {sm.isSpikeAsset ? "Spike Compression Engine" : "Gaussian Mean-Reversion Band"}
+              {sm.isSpikeAsset ? "Boom/Crash Spike Watch" : "Overbought / Oversold Meter"}
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono tabular-nums">
             <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
-              <span className="text-slate-500 font-sans block">20-Period Z-Score</span>
+              <span className="text-slate-500 font-sans block">20-Candle Stretch (Z-Score)</span>
               <span
                 className={`font-bold text-base mt-0.5 block ${
                   Math.abs(sm.zScore20) >= 2.0 ? "text-amber-700" : "text-emerald-700"
@@ -251,7 +483,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
             </div>
             <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <span className="text-slate-500 font-sans block">
-                {sm.isSpikeAsset ? "Bars Since Last Spike" : "20-Bar Mean / 1σ"}
+                {sm.isSpikeAsset ? "Candles Since Last Spike" : "20-Candle Average"}
               </span>
               <span className="text-slate-900 font-bold text-base mt-0.5 block">
                 {sm.isSpikeAsset
@@ -261,12 +493,12 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
             </div>
             <div className="p-3 rounded-lg bg-[#E8ECF2] border border-slate-300">
               <span className="text-slate-500 font-sans block">
-                {sm.isSpikeAsset ? "Pre-Spike Compression" : "Constant Variance Profile"}
+                {sm.isSpikeAsset ? "Candle Tightness" : "Market Speed"}
               </span>
               <span className="text-slate-900 font-semibold mt-1 block">
                 {sm.isSpikeAsset
-                  ? `${sm.compressionRatio}x median candle range`
-                  : symbol.syntheticProfile?.constantVolatilityPct || "24/7 Constant Algorithmic Volatility"}
+                  ? `${sm.compressionRatio}x normal range`
+                  : symbol.syntheticProfile?.constantVolatilityPct || "24/7 Synthetic Index"}
               </span>
             </div>
           </div>
@@ -279,7 +511,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
             <div className="font-bold text-slate-900 flex items-center gap-2">
               <Activity className="h-4 w-4 text-emerald-600" />
               <span>
-                Real-Time Paired SMT Divergence ({symbol.ticker} vs {evaluation.smtDivergence.referenceName || "Benchmark"})
+                Related Pair Check ({symbol.ticker} vs {evaluation.smtDivergence.referenceName || "Benchmark"})
               </span>
             </div>
             <p className="text-slate-600">{evaluation.smtDivergence.summary}</p>
@@ -298,163 +530,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
         </div>
       )}
 
-      {/* MODULE 5: DYNAMIC RISK & EXECUTION OUTPUT CARD */}
-      <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-6 space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-300 pb-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-              <span>5-Module Mathematical Confluence Engine</span>
-              <span>·</span>
-              <span className="font-mono text-slate-800 font-semibold">
-                {symbol.ticker} ({timeframe})
-              </span>
-              <span>·</span>
-              <span>{evaluation.alignedModulesCount} of 5 Modules Aligned</span>
-              <span>·</span>
-              <span className="font-mono text-slate-700">{telemetry.activeCandleCount} bars</span>
-            </div>
-            <h2 className="text-xl font-bold font-display text-slate-900 flex items-center gap-2.5">
-              {isBullish ? (
-                <TrendingUp className="h-5 w-5 text-emerald-600" />
-              ) : isBearish ? (
-                <TrendingDown className="h-5 w-5 text-rose-600" />
-              ) : (
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-              )}
-              <span>
-                Directional Bias:{" "}
-                <span
-                  className={
-                    isBullish ? "text-emerald-700" : isBearish ? "text-rose-600" : "text-amber-700"
-                  }
-                >
-                  {evaluation.directionalBias}
-                </span>
-              </span>
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-4 bg-[#E8ECF2] border border-slate-300 rounded-xl px-4 py-3 shrink-0">
-            <div>
-              <div className="text-[11px] text-slate-500">Confluence Score</div>
-              <div
-                className={`text-2xl font-mono font-bold tabular-nums ${
-                  evaluation.highProbabilityTrigger ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                {evaluation.confluenceScorePct}%
-              </div>
-            </div>
-            <div className="h-8 w-px bg-slate-300" />
-            <div>
-              <div className="text-[11px] text-slate-500">Execution Gate</div>
-              <div
-                className={`text-xs font-semibold ${
-                  evaluation.highProbabilityTrigger ? "text-emerald-700" : "text-amber-700"
-                }`}
-              >
-                {evaluation.highProbabilityTrigger
-                  ? "Trigger Active (≥3/5 & ≥1:2 R:R)"
-                  : "WAIT — Stand Aside"}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Formula Summary Banner */}
-        <div
-          className={`rounded-lg border p-3.5 text-xs font-mono flex items-center justify-between gap-4 ${
-            evaluation.highProbabilityTrigger
-              ? "bg-emerald-50/70 border-emerald-300 text-emerald-950"
-              : "bg-amber-50/70 border-amber-300 text-amber-950"
-          }`}
-        >
-          <span>{evaluation.confluenceFormulaBanner}</span>
-          <span className="font-bold shrink-0 tabular-nums">
-            True R:R {evaluation.executionCard.riskRewardRatio}
-          </span>
-        </div>
-
-        {/* Structured Trade Execution Coordinates */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
-            <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Active PD Array Zone</span>
-              <Target className="h-3.5 w-3.5 text-emerald-600" />
-            </div>
-            <div className="text-sm font-mono font-bold text-slate-900 tabular-nums">
-              {formatPrice(evaluation.executionCard.entryZoneLow, symbol)} –{" "}
-              {formatPrice(evaluation.executionCard.entryZoneHigh, symbol)}
-            </div>
-            <div className="text-[11px] text-emerald-700 font-mono font-semibold tabular-nums">
-              Optimal Entry: {formatPrice(evaluation.executionCard.optimalEntry705, symbol)}
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-rose-50/50 border border-rose-300 space-y-1">
-            <div className="flex items-center justify-between text-xs text-rose-700">
-              <span>Invalidation SL</span>
-              <Shield className="h-3.5 w-3.5 text-rose-600" />
-            </div>
-            <div className="text-sm font-mono font-bold text-rose-700 tabular-nums">
-              {formatPrice(evaluation.executionCard.invalidationSL, symbol)}
-            </div>
-            <div className="text-[11px] text-slate-600 leading-tight">
-              {evaluation.executionCard.atrBufferApplied}
-            </div>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
-            <div className="text-xs text-slate-500">TP1 (1.272 Fib Ext)</div>
-            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
-              {formatPrice(evaluation.executionCard.tp1_1272, symbol)}
-            </div>
-            <div className="text-[11px] text-slate-500">Scale 40% &amp; move SL to BE</div>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-300 space-y-1">
-            <div className="text-xs text-emerald-800 font-medium">TP2 (1.618 Fib Ext)</div>
-            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
-              {formatPrice(evaluation.executionCard.tp2_1618, symbol)}
-            </div>
-            <div className="text-[11px] text-emerald-800/80">Primary external pool target</div>
-          </div>
-
-          <div className="p-3.5 rounded-lg bg-[#E8ECF2] border border-slate-300 space-y-1">
-            <div className="text-xs text-slate-500">TP3 (2.0 Fib Runner)</div>
-            <div className="text-sm font-mono font-bold text-emerald-700 tabular-nums">
-              {formatPrice(evaluation.executionCard.tp3_2000, symbol)}
-            </div>
-            <div className="text-[11px] text-slate-500">HTF expansion objective</div>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-300 text-xs">
-          <span className="text-slate-600">
-            Order Gate:{" "}
-            <strong className="text-slate-900 font-mono">{evaluation.executionCard.orderType}</strong> ·{" "}
-            {evaluation.executionCard.atrBufferApplied}
-          </span>
-          {onSyncLevelsToWorkspace && (
-            <button
-              type="button"
-              onClick={() =>
-                onSyncLevelsToWorkspace({
-                  entry: evaluation.executionCard.optimalEntry705,
-                  stopLoss: evaluation.executionCard.invalidationSL,
-                  tp1: evaluation.executionCard.tp1_1272,
-                  tp2: evaluation.executionCard.tp2_1618,
-                })
-              }
-              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-colors cursor-pointer whitespace-nowrap"
-            >
-              Sync Levels to Risk Sizer &amp; Chart
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 5-MODULE CONFLUENCE BREAKDOWN GRID */}
+      {/* 5-POINT SETUP CHECKLIST GRID */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {evaluation.modules.map((mod, idx) => {
           const pct = Math.round((mod.score / mod.maxScore) * 100);
@@ -468,7 +544,7 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-xs text-slate-500 font-mono">
-                    0{idx + 1}. {mod.aligned ? "Aligned" : "Awaiting Trigger"}
+                    0{idx + 1}. {mod.aligned ? "Passed" : "Waiting"}
                   </div>
                   <h3 className="text-sm font-bold font-display text-slate-900 mt-0.5">{mod.title}</h3>
                 </div>
@@ -514,16 +590,16 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
         })}
       </div>
 
-      {/* LIVE DETECTED SMC INVENTORY (REAL ORDER BLOCKS, FVGS, LIQUIDITY POOLS) */}
+      {/* KEY ZONES & LEVELS REFERENCE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3">
           <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-300 pb-2.5">
-            Detected Order Blocks &amp; Open Fair Value Gaps
+            Key Support / Resistance Zones &amp; Price Gaps
           </h3>
           <div className="space-y-2 text-xs font-mono tabular-nums">
             {evaluation.overlays.orderBlocks.length === 0 && evaluation.overlays.fairValueGaps.length === 0 ? (
               <p className="font-sans text-slate-500 py-2">
-                Scanning live candles for displacement Order Blocks (&gt;1.35× ATR) and unmitigated FVGs...
+                Scanning live candles for strong support/resistance zones and open price gaps...
               </p>
             ) : (
               <>
@@ -533,11 +609,11 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                     className="flex items-center justify-between p-2.5 rounded-lg bg-[#E8ECF2] border border-slate-300"
                   >
                     <div>
-                      <span className="font-bold text-slate-900 block">
-                        {ob.type.replace(/_/g, " ")} ({ob.status})
+                      <span className="font-bold text-slate-900 block font-sans">
+                        {ob.type.includes("BULL") ? "Support / Buy Zone" : "Resistance / Sell Zone"} ({ob.status})
                       </span>
                       <span className="text-[10px] text-slate-500 font-sans">
-                        Displacement {ob.displacementAtrMultiple}× ATR
+                        Move strength {ob.displacementAtrMultiple}× ATR
                       </span>
                     </div>
                     <span className="text-emerald-700 font-semibold">
@@ -551,11 +627,11 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
                     className="flex items-center justify-between p-2.5 rounded-lg bg-[#E8ECF2] border border-slate-300"
                   >
                     <div>
-                      <span className="font-bold text-slate-900 block">
-                        {fvg.type} FVG ({fvg.status})
+                      <span className="font-bold text-slate-900 block font-sans">
+                        {fvg.type === "BULLISH" ? "Bullish" : "Bearish"} Price Gap ({fvg.status})
                       </span>
                       <span className="text-[10px] text-slate-500 font-sans">
-                        50% CE: {formatPrice(fvg.midpointCE, symbol)}
+                        Midpoint: {formatPrice(fvg.midpointCE, symbol)}
                       </span>
                     </div>
                     <span className="text-slate-800 font-semibold">
@@ -570,37 +646,37 @@ export const QuantAnalyzerPanel: React.FC<QuantAnalyzerPanelProps> = ({
 
         <div className="rounded-xl bg-[#F1F4F8] border border-slate-300 p-5 space-y-3">
           <h3 className="text-sm font-bold font-display text-slate-900 border-b border-slate-300 pb-2.5">
-            Mapped Liquidity Pools &amp; Fibonacci Dealing Range
+            Important Daily &amp; Pullback Levels
           </h3>
           <div className="space-y-2 text-xs font-mono tabular-nums">
             <div className="flex justify-between py-1 border-b border-slate-300/70">
-              <span className="text-slate-500 font-sans">PDH / PDL (Prev Day)</span>
+              <span className="text-slate-500 font-sans">Yesterday High / Low</span>
               <span className="text-slate-900 font-semibold">
                 {evaluation.smcStructure.pdh ? formatPrice(evaluation.smcStructure.pdh, symbol) : "—"} /{" "}
                 {evaluation.smcStructure.pdl ? formatPrice(evaluation.smcStructure.pdl, symbol) : "—"}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-300/70">
-              <span className="text-slate-500 font-sans">Asian High / Low (00–05 UTC)</span>
+              <span className="text-slate-500 font-sans">Asian Session High / Low</span>
               <span className="text-slate-900 font-semibold">
                 {evaluation.smcStructure.asianHigh ? formatPrice(evaluation.smcStructure.asianHigh, symbol) : "—"} /{" "}
                 {evaluation.smcStructure.asianLow ? formatPrice(evaluation.smcStructure.asianLow, symbol) : "—"}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-300/70">
-              <span className="text-slate-500 font-sans">0.50 Equilibrium ({evaluation.fibonacci.currentZone})</span>
+              <span className="text-slate-500 font-sans">50% Range Midpoint</span>
               <span className="text-slate-900 font-semibold">
                 {formatPrice(evaluation.fibonacci.equilibrium50, symbol)}
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-slate-300/70">
-              <span className="text-emerald-800 font-sans font-semibold">0.705 Institutional OTE</span>
+              <span className="text-emerald-800 font-sans font-semibold">Key Pullback Level (70.5%)</span>
               <span className="text-emerald-700 font-bold">
                 {formatPrice(evaluation.fibonacci.ote705SweetSpot, symbol)}
               </span>
             </div>
             <div className="flex justify-between py-1">
-              <span className="text-slate-500 font-sans">BSL / SSL Pools</span>
+              <span className="text-slate-500 font-sans">Nearest High / Low Targets</span>
               <span className="text-slate-900 font-semibold">
                 {formatPrice(evaluation.smcStructure.bslPool, symbol)} /{" "}
                 {formatPrice(evaluation.smcStructure.sslPool, symbol)}

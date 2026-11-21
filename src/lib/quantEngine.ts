@@ -6,6 +6,25 @@ import {
   SmtReferenceData,
 } from "../services/MarketDataService";
 
+export type TradingStyle = "SCALP" | "NORMAL";
+
+export interface StyleTradePlan {
+  style: TradingStyle;
+  label: string;
+  holdTime: string;
+  orderType: "BUY NOW / LIMIT" | "SELL NOW / LIMIT" | "BUY LIMIT" | "SELL LIMIT" | "WAIT";
+  entry: number;
+  entryZoneLow: number;
+  entryZoneHigh: number;
+  stopLoss: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  riskRewardRatio: string;
+  rrNumeric: number;
+  stopNote: string;
+}
+
 export interface SwingPoint {
   index: number;
   timestamp: number;
@@ -97,11 +116,12 @@ export interface FibonacciMatrix {
 export interface QuantitativeEvaluation {
   symbol: SyntheticSymbol;
   timeframe: string;
+  tradingStyle: TradingStyle;
   evaluatedAt: string;
-  directionalBias: "BULLISH" | "BEARISH" | "NEUTRAL (WAIT FOR LIQUIDITY SWEEP)";
+  directionalBias: "BULLISH" | "BEARISH" | "WAIT (NO CLEAN SETUP)";
   confluenceScorePct: number; // 0 - 100%
   alignedModulesCount: number; // 0 - 5
-  highProbabilityTrigger: boolean; // True when >= 3 of 5 modules align AND R:R >= 2.0
+  highProbabilityTrigger: boolean; // True when style-appropriate checks & R:R align
   confluenceFormulaBanner: string;
   modules: QuantModuleBreakdown[];
   fibonacci: FibonacciMatrix;
@@ -144,8 +164,14 @@ export interface QuantitativeEvaluation {
     filteredOutReason?: string;
     details: string;
   };
+  tradePlans: {
+    scalp: StyleTradePlan;
+    normal: StyleTradePlan;
+  };
   executionCard: {
-    orderType: "BUY LIMIT" | "SELL LIMIT" | "WAIT (NO TRIGGER)";
+    orderType: "BUY NOW / LIMIT" | "SELL NOW / LIMIT" | "BUY LIMIT" | "SELL LIMIT" | "WAIT";
+    styleLabel: string;
+    holdTime: string;
     entryZoneLow: number;
     entryZoneHigh: number;
     optimalEntry705: number;
@@ -974,7 +1000,7 @@ export function evaluateStructuralScan(
       detectedPattern = "Bearish Engulfing Displacement Candle";
       hasStrongCandleTrigger = true;
     } else if (body > atr * 1.35 && ((isBullish && c1.close > c1.open) || (!isBullish && c1.close < c1.open))) {
-      detectedPattern = isBullish ? "Bullish Institutional Displacement Bar" : "Bearish Institutional Displacement Bar";
+      detectedPattern = isBullish ? "Strong Bullish Momentum Candle" : "Strong Bearish Momentum Candle";
       hasStrongCandleTrigger = true;
     }
   }
@@ -1052,12 +1078,14 @@ export function evaluateStructuralScan(
 export function evaluateLiveTick(
   liveCandle: StandardCandle,
   structural: StructuralScanResult,
-  futuresTelemetry?: FuturesTelemetry | null
+  futuresTelemetry?: FuturesTelemetry | null,
+  tradingStyle: TradingStyle = "NORMAL"
 ): QuantitativeEvaluation {
   const { symbol, timeframe, isBullish, killzone, pdArrayType, pdArrayZone } = structural;
   const currentPrice = liveCandle.close;
+  const isScalp = tradingStyle === "SCALP";
 
-  // 1. Live Liquidity Sweep Detection (wick pierces SSL/BSL or PDH/PDL/Asian pool and rejects)
+  // 1. Live Stop-Hunt / Liquidity Sweep Detection
   const isSweepSSL =
     liveCandle.low <= structural.sslPool ||
     (structural.pdl !== null && liveCandle.low <= structural.pdl) ||
@@ -1069,7 +1097,7 @@ export function evaluateLiveTick(
   const anyPriorPoolSwept = structural.liquidityPools.some((p) => p.swept);
   const dynamicSweepActive = (isBullish ? isSweepSSL : isSweepBSL) || anyPriorPoolSwept;
 
-  // 2. Premium vs Discount Zone check on live price
+  // 2. Pullback / Value Zone check
   const isInsideDiscount = currentPrice < structural.equilibrium50;
   const isInsidePremium = currentPrice > structural.equilibrium50;
   const isInsideEntryZone = currentPrice >= structural.entryLow && currentPrice <= structural.entryHigh;
@@ -1084,31 +1112,39 @@ export function evaluateLiveTick(
 
   const fibFilterPassed = (isBullish && isInsideDiscount) || (!isBullish && isInsidePremium);
 
-  // Module 1: SMC / ICT Structure + MTF Alignment + Real PD Arrays (Max 25)
+  // Module 1: Trend & Market Structure (Max 25)
   const hasRealStructure = structural.structureEvent !== "RANGING";
   const hasPdArray = structural.orderBlocks.length > 0 || structural.fairValueGaps.length > 0;
-  const mod1Aligned = hasRealStructure && (structural.mtfAlignment.alignedWithHtf || dynamicSweepActive);
-  let mod1Score = 6;
+  const mod1Aligned = isScalp
+    ? hasRealStructure || hasPdArray
+    : hasRealStructure && (structural.mtfAlignment.alignedWithHtf || dynamicSweepActive);
+  let mod1Score = 8;
   if (hasRealStructure) mod1Score += 7;
-  if (structural.mtfAlignment.alignedWithHtf) mod1Score += 5;
-  if (hasPdArray) mod1Score += 4;
+  if (structural.mtfAlignment.alignedWithHtf) mod1Score += 4;
+  if (hasPdArray) mod1Score += 3;
   if (dynamicSweepActive) mod1Score += 3;
   mod1Score = Math.min(25, mod1Score);
 
-  // Module 2: Fibonacci OTE & Discount/Premium Filter (Max 25)
+  // Module 2: Pullback & Value Entry Zone (Max 25)
+  const scalpMomentumOk = isScalp && Math.abs(currentPrice - structural.equilibrium50) <= structural.atr * 2.5;
+  const mod2Aligned = isScalp ? fibFilterPassed || scalpMomentumOk : fibFilterPassed;
   const mod2Score = fibFilterPassed
     ? isInsideEntryZone
       ? 25
       : isNearOte
       ? 21
-      : 17
-    : 8;
+      : 18
+    : scalpMomentumOk
+    ? 16
+    : 9;
 
-  // Module 3: Candlestick Trigger localized at POI (Max 15)
-  const mod3Aligned = (structural.hasStrongCandleTrigger || isInsideEntryZone) && fibFilterPassed;
-  const mod3Score = mod3Aligned ? (structural.volumeExpansion ? 15 : 12) : structural.hasStrongCandleTrigger ? 8 : 5;
+  // Module 3: Candlestick & Price Action Trigger (Max 15)
+  const mod3Aligned = isScalp
+    ? structural.hasStrongCandleTrigger || structural.volumeExpansion || isInsideEntryZone
+    : (structural.hasStrongCandleTrigger || isInsideEntryZone) && fibFilterPassed;
+  const mod3Score = mod3Aligned ? (structural.volumeExpansion ? 15 : 13) : structural.hasStrongCandleTrigger ? 9 : 6;
 
-  // Module 4: Real Asset-Specific Quantitative Microstructure (Max 20) — NO HARDCODED TRUE!
+  // Module 4: Market Conditions & Asset Telemetry (Max 20)
   let mod4Aligned = false;
   let mod4Score = 8;
   let mod4Summary = "";
@@ -1124,21 +1160,20 @@ export function evaluateLiveTick(
     const oiDelta = futuresTelemetry?.oiDeltaPct24h;
     const cvdBias = futuresTelemetry?.cvdBias || "NEUTRAL";
 
-    // 4-Quadrant OI + Price Matrix
-    let oiRegime = "Neutral Positioning";
+    let oiRegime = "Balanced Positioning";
     let oiFavorsBias = false;
     if (oiDelta !== undefined) {
       if (oiDelta > 0.5 && structural.priceChange24BarsPct > 0) {
-        oiRegime = "Long Buildup (OI↑ Price↑)";
+        oiRegime = "Buyers Building (OI↑ Price↑)";
         oiFavorsBias = isBullish;
       } else if (oiDelta > 0.5 && structural.priceChange24BarsPct < 0) {
-        oiRegime = "Short Buildup (OI↑ Price↓)";
+        oiRegime = "Sellers Building (OI↑ Price↓)";
         oiFavorsBias = !isBullish;
       } else if (oiDelta < -0.5 && structural.priceChange24BarsPct < 0) {
-        oiRegime = "Long Liquidation Flush (OI↓ Price↓)";
-        oiFavorsBias = isBullish; // Exhaustion flush favors reversal long
+        oiRegime = "Long Flush / Bounce Zone";
+        oiFavorsBias = isBullish;
       } else if (oiDelta < -0.5 && structural.priceChange24BarsPct > 0) {
-        oiRegime = "Short Squeeze Covering (OI↓ Price↑)";
+        oiRegime = "Short Squeeze Push";
         oiFavorsBias = isBullish;
       }
     }
@@ -1149,16 +1184,15 @@ export function evaluateLiveTick(
       (!isBullish && cvdBias === "BEARISH_DISTRIBUTION");
 
     const passCount = [oiFavorsBias, fundingFavorsBias, cvdFavorsBias].filter(Boolean).length;
-    mod4Aligned = passCount >= 2;
-    mod4Score = 6 + passCount * 4 + (oiDelta !== undefined ? 2 : 0);
-    mod4Score = Math.min(20, mod4Score);
+    mod4Aligned = passCount >= (isScalp ? 1 : 2);
+    mod4Score = Math.min(20, 8 + passCount * 4);
 
-    mod4Summary = `Bybit V5 Orderflow: ${oiRegime}. Funding ${fundingPctStr} · CVD ${cvdBias.replace("_", " ")}.`;
+    mod4Summary = `Bybit Futures Flow: ${oiRegime}. Funding ${fundingPctStr} · Buying/Selling Pressure: ${cvdBias.replace("_", " ")}.`;
     mod4Metrics = [
-      { label: "Live Funding Rate (8h)", value: fundingPctStr, highlight: fundingFavorsBias },
+      { label: "Funding Rate (8h)", value: fundingPctStr, highlight: fundingFavorsBias },
       { label: "Open Interest & 24h Δ", value: `${oiUsd} (${oiDelta !== undefined ? `${oiDelta > 0 ? "+" : ""}${oiDelta}%` : "Live"})`, highlight: oiFavorsBias },
-      { label: "OI / Price Quadrant", value: oiRegime, highlight: oiFavorsBias },
-      { label: "Live Tape CVD Bias", value: cvdBias.replace("_", " "), highlight: cvdFavorsBias },
+      { label: "Positioning Flow", value: oiRegime, highlight: oiFavorsBias },
+      { label: "Live Order Pressure", value: cvdBias.replace("_", " "), highlight: cvdFavorsBias },
     ];
   } else if (symbol.marketType === "SYNTHETIC") {
     const sm = structural.syntheticMetrics;
@@ -1173,12 +1207,12 @@ export function evaluateLiveTick(
       mod4Aligned = spikeDue || compressed;
       mod4Score = 8 + (spikeDue ? 6 : 0) + (compressed ? 6 : 0);
 
-      mod4Summary = `Boom/Crash Spike Telemetry: ${barsSince} bars since last spike (avg ${avgInterval} bars), compression ratio ${compression}x.`;
+      mod4Summary = `Boom/Crash Spike Watch: ${barsSince} candles since last spike (avg ${avgInterval}), candle tightness ${compression}x.`;
       mod4Metrics = [
-        { label: "Bars Since Last Spike", value: `${barsSince} bars (Avg ${avgInterval})`, highlight: spikeDue },
-        { label: "Pre-Spike Compression", value: `${compression}x median range`, highlight: compressed },
-        { label: "20-Bar Z-Score", value: `${zScore > 0 ? "+" : ""}${zScore}σ`, highlight: Math.abs(zScore) >= 1.8 },
-        { label: "Engine Regime", value: spikeDue && compressed ? "Pre-Spike Base Ready" : "Standard Tick Drift" },
+        { label: "Candles Since Last Spike", value: `${barsSince} bars (Avg ${avgInterval})`, highlight: spikeDue },
+        { label: "Candle Compression", value: `${compression}x normal range`, highlight: compressed },
+        { label: "Stretch (Z-Score)", value: `${zScore > 0 ? "+" : ""}${zScore}σ`, highlight: Math.abs(zScore) >= 1.8 },
+        { label: "Spike Readiness", value: spikeDue && compressed ? "Spike Zone Ready" : "Normal Tick Movement" },
       ];
     } else {
       const meanRevEdge = (isBullish && zScore <= -1.2) || (!isBullish && zScore >= 1.2);
@@ -1186,16 +1220,15 @@ export function evaluateLiveTick(
       mod4Aligned = meanRevEdge || trendEdge;
       mod4Score = meanRevEdge ? 19 : trendEdge ? 15 : 8;
 
-      mod4Summary = `Volatility Z-Score Engine: Price at ${zScore > 0 ? "+" : ""}${zScore}σ vs 20-period mean (${formatPrice(sm?.sma20 || currentPrice, symbol)}). Regime: ${sm?.regime || "TRENDING"}.`;
+      mod4Summary = `Volatility Check: Price is ${zScore > 0 ? "+" : ""}${zScore}σ from its 20-candle average (${formatPrice(sm?.sma20 || currentPrice, symbol)}).`;
       mod4Metrics = [
-        { label: "20-Bar Z-Score", value: `${zScore > 0 ? "+" : ""}${zScore}σ`, highlight: Math.abs(zScore) >= 1.5 },
-        { label: "Statistical Regime", value: (sm?.regime || "TRENDING").replace("_", " "), highlight: meanRevEdge },
-        { label: "Volatility Profile", value: symbol.syntheticProfile?.constantVolatilityPct || "24/7 Constant Variance" },
-        { label: "ATR (14)", value: formatPrice(structural.atr, symbol) },
+        { label: "20-Bar Stretch", value: `${zScore > 0 ? "+" : ""}${zScore}σ`, highlight: Math.abs(zScore) >= 1.5 },
+        { label: "Market State", value: (sm?.regime || "TRENDING").replace("_", " "), highlight: meanRevEdge },
+        { label: "Volatility Type", value: symbol.syntheticProfile?.constantVolatilityPct || "24/7 Synthetic Index" },
+        { label: "ATR (14) Move", value: formatPrice(structural.atr, symbol) },
       ];
     }
   } else {
-    // FOREX, METALS & GLOBAL INDICES: Real Paired SMT Divergence + ICT Killzone + Asian Sweep
     const smt = structural.smtDivergence;
     const smtAligned =
       (isBullish && smt.status === "BULLISH_SMT") ||
@@ -1204,16 +1237,18 @@ export function evaluateLiveTick(
       (isBullish && structural.asianLow !== null && liveCandle.low <= structural.asianLow) ||
       (!isBullish && structural.asianHigh !== null && liveCandle.high >= structural.asianHigh);
 
-    mod4Aligned = smtAligned || killzone.active || asianSweptAligned;
-    mod4Score = 8 + (killzone.active ? 6 : 0) + (smtAligned ? 6 : smt.status === "CORRELATED_CONFIRMED" ? 3 : 0) + (asianSweptAligned ? 3 : 0);
-    mod4Score = Math.min(20, mod4Score);
+    mod4Aligned = smtAligned || killzone.active || asianSweptAligned || smt.status === "CORRELATED_CONFIRMED";
+    mod4Score = Math.min(
+      20,
+      9 + (killzone.active ? 5 : 0) + (smtAligned ? 5 : smt.status === "CORRELATED_CONFIRMED" ? 3 : 0) + (asianSweptAligned ? 3 : 0)
+    );
 
     mod4Summary = `${smt.summary} Active Session: ${killzone.windowName}.`;
     mod4Metrics = [
-      { label: `SMT vs ${smt.referenceName || "Benchmark"}`, value: smt.status.replace(/_/g, " "), highlight: smtAligned },
-      { label: "ICT Killzone Window", value: killzone.active ? killzone.windowName : "Outside Killzone", highlight: killzone.active },
+      { label: `Pair Check vs ${smt.referenceName || "Related Pair"}`, value: smt.status.replace(/_/g, " "), highlight: smtAligned },
+      { label: "Trading Session", value: killzone.active ? killzone.windowName : "Normal / Quiet Session", highlight: killzone.active },
       {
-        label: "Asian Range (00-05 UTC)",
+        label: "Asian Range (00–05 UTC)",
         value:
           structural.asianHigh && structural.asianLow
             ? `${formatPrice(structural.asianLow, symbol)} – ${formatPrice(structural.asianHigh, symbol)}`
@@ -1224,72 +1259,110 @@ export function evaluateLiveTick(
     ];
   }
 
-  // Module 5: Honest Risk-to-Reward & Execution Filter (NO FAKE 2.5 CLAMP!)
-  const actualRisk = Math.abs(structural.optimalEntry - structural.invalidationSL);
-  const rewardTP2 = Math.abs(structural.ext1618_TP2 - structural.optimalEntry);
-  const rawRR = actualRisk > 0 ? rewardTP2 / actualRisk : 0;
-  const rrNumeric = Number(Math.max(0.1, rawRR).toFixed(2));
-  const mod5Aligned = rrNumeric >= 2.0;
-  const mod5Score = rrNumeric >= 2.5 ? 15 : rrNumeric >= 2.0 ? 12 : 5;
+  // -------------------------------------------------------------------------
+  // DUAL RETAIL TRADE PLANS: SCALP SETUP vs NORMAL TRADE SETUP
+  // -------------------------------------------------------------------------
+  const atr = Math.max(structural.atr, currentPrice * 0.0005);
+
+  // A) SCALP PLAN: Immediate / slight pullback entry near current price, tight ATR SL, fast 1.2R / 1.8R / 2.5R TPs
+  const scalpEntry = isBullish
+    ? currentPrice - atr * 0.15
+    : currentPrice + atr * 0.15;
+  const scalpZoneLow = Math.min(scalpEntry, currentPrice) - atr * 0.15;
+  const scalpZoneHigh = Math.max(scalpEntry, currentPrice) + atr * 0.15;
+  const scalpRisk = atr * 1.05; // Tight practical scalp stop (~1x ATR)
+  const scalpSL = isBullish ? scalpEntry - scalpRisk : scalpEntry + scalpRisk;
+  const scalpTP1 = isBullish ? scalpEntry + scalpRisk * 1.2 : scalpEntry - scalpRisk * 1.2;
+  const scalpTP2 = isBullish ? scalpEntry + scalpRisk * 1.8 : scalpEntry - scalpRisk * 1.8;
+  const scalpTP3 = isBullish ? scalpEntry + scalpRisk * 2.5 : scalpEntry - scalpRisk * 2.5;
+  const scalpRR = Number((Math.abs(scalpTP2 - scalpEntry) / Math.max(scalpRisk, 1e-8)).toFixed(2));
+
+  // B) NORMAL DAY/SWING PLAN: Pullback to clean S/R / Key Zone, comfortable swing SL (~1.5x ATR or structural), 1.5R / 2.5R / 3.5R TPs
+  const maxReasonableSwingDist = atr * 2.6;
+  const rawNormalEntry =
+    Math.abs(structural.optimalEntry - currentPrice) <= atr * 2.2
+      ? structural.optimalEntry
+      : isBullish
+      ? currentPrice - atr * 0.45
+      : currentPrice + atr * 0.45;
+  const rawNormalSLDist = Math.abs(rawNormalEntry - structural.invalidationSL);
+  const normalRisk =
+    rawNormalSLDist >= atr * 0.9 && rawNormalSLDist <= maxReasonableSwingDist
+      ? rawNormalSLDist
+      : atr * 1.55;
+  const normalSL = isBullish ? rawNormalEntry - normalRisk : rawNormalEntry + normalRisk;
+  const normalTP1 = isBullish ? rawNormalEntry + normalRisk * 1.5 : rawNormalEntry - normalRisk * 1.5;
+  const normalTP2 = isBullish ? rawNormalEntry + normalRisk * 2.5 : rawNormalEntry - normalRisk * 2.5;
+  const normalTP3 = isBullish ? rawNormalEntry + normalRisk * 3.5 : rawNormalEntry - normalRisk * 3.5;
+  const normalRR = Number((Math.abs(normalTP2 - rawNormalEntry) / Math.max(normalRisk, 1e-8)).toFixed(2));
+  const normalZoneLow = Math.min(rawNormalEntry - atr * 0.25, structural.entryLow);
+  const normalZoneHigh = Math.max(rawNormalEntry + atr * 0.25, structural.entryHigh);
+
+  const activeRR = isScalp ? scalpRR : normalRR;
+  const minRequiredRR = isScalp ? 1.5 : 1.8;
+  const mod5Aligned = activeRR >= minRequiredRR;
+  const mod5Score = activeRR >= 2.2 ? 15 : activeRR >= minRequiredRR ? 13 : 6;
 
   const structureEventLabelMap: Record<StructuralScanResult["structureEvent"], string> = {
-    BULLISH_BOS: "Bullish BOS",
-    BEARISH_BOS: "Bearish BOS",
-    BULLISH_CHOCH: "Bullish CHoCH / MSS",
-    BEARISH_CHOCH: "Bearish CHoCH / MSS",
-    RANGING: "Ranging / No Break",
+    BULLISH_BOS: "Uptrend Continuation (Higher High)",
+    BEARISH_BOS: "Downtrend Continuation (Lower Low)",
+    BULLISH_CHOCH: "Bullish Reversal Break",
+    BEARISH_CHOCH: "Bearish Reversal Break",
+    RANGING: "Sideways / Range-Bound",
   };
 
   const modules: QuantModuleBreakdown[] = [
     {
       id: "smc-ict",
       moduleNumber: 1,
-      title: "Smart Money Concepts (SMC) & MTF Structure",
+      title: "Trend & Market Structure",
       aligned: mod1Aligned,
       score: mod1Score,
       maxScore: 25,
-      summary: `${structureEventLabelMap[structural.structureEvent]} detected on ${timeframe}. ${structural.mtfAlignment.alignmentNote}`,
+      summary: `${structureEventLabelMap[structural.structureEvent]} on ${timeframe}. ${structural.mtfAlignment.alignmentNote}`,
       metrics: [
-        { label: `Execution (${timeframe}) Event`, value: structureEventLabelMap[structural.structureEvent], highlight: hasRealStructure },
-        { label: "HTF Alignment (1D / 4H)", value: `${structural.mtfAlignment.d1.bias} / ${structural.mtfAlignment.h4.bias}`, highlight: structural.mtfAlignment.alignedWithHtf },
-        { label: "Primary PD Array", value: `${pdArrayType} (${structural.orderBlocks.length} OB · ${structural.fairValueGaps.length} FVG)` },
-        { label: "BSL / SSL Liquidity", value: `${formatPrice(structural.bslPool, symbol)} / ${formatPrice(structural.sslPool, symbol)}`, highlight: dynamicSweepActive },
+        { label: `${timeframe} Trend Signal`, value: structureEventLabelMap[structural.structureEvent], highlight: hasRealStructure },
+        { label: "Higher TF Trend (1D / 4H)", value: `${structural.mtfAlignment.d1.bias} / ${structural.mtfAlignment.h4.bias}`, highlight: structural.mtfAlignment.alignedWithHtf },
+        { label: "Key Price Zones", value: `${structural.orderBlocks.length} S/R Zone(s) · ${structural.fairValueGaps.length} Gap(s)` },
+        { label: "High / Low Targets", value: `${formatPrice(structural.bslPool, symbol)} / ${formatPrice(structural.sslPool, symbol)}`, highlight: dynamicSweepActive },
       ],
     },
     {
       id: "fib-ote",
       moduleNumber: 2,
-      title: "Fibonacci Dealing Range & 0.705 OTE",
-      aligned: fibFilterPassed,
+      title: isScalp ? "Scalp Pullback & Entry Timing" : "Pullback & Value Entry Zone",
+      aligned: mod2Aligned,
       score: mod2Score,
       maxScore: 25,
       summary: fibFilterPassed
         ? isBullish
-          ? `Price in Discount (< 50% EQ at ${formatPrice(structural.equilibrium50, symbol)}). OTE 0.705 anchored at ${formatPrice(structural.ote705SweetSpot, symbol)}.`
-          : `Price in Premium (> 50% EQ at ${formatPrice(structural.equilibrium50, symbol)}). OTE 0.705 anchored at ${formatPrice(structural.ote705SweetSpot, symbol)}.`
-        : `Price is currently in ${currentZone} — violates strict 50% Premium/Discount rule for ${isBullish ? "Longs" : "Shorts"}. Wait for pullback.`,
+          ? `Price pulled back into a good buy value area below the 50% midpoint (${formatPrice(structural.equilibrium50, symbol)}).`
+          : `Price pulled back into a good sell area above the 50% midpoint (${formatPrice(structural.equilibrium50, symbol)}).`
+        : isScalp
+        ? `Momentum scalp zone active near live price (${formatPrice(currentPrice, symbol)}) with tight 1× ATR stop.`
+        : `Price is extended in the ${currentZone.toLowerCase()} zone — wait for a cleaner pullback toward ${formatPrice(rawNormalEntry, symbol)}.`,
       metrics: [
-        { label: "Equilibrium (0.50)", value: `${formatPrice(structural.equilibrium50, symbol)} (${currentZone})`, highlight: fibFilterPassed },
-        { label: "OTE Zone (0.618–0.786)", value: `${formatPrice(Math.min(structural.ote618, structural.ote786), symbol)} – ${formatPrice(Math.max(structural.ote618, structural.ote786), symbol)}` },
-        { label: "0.705 Sweet Spot", value: formatPrice(structural.ote705SweetSpot, symbol), highlight: isNearOte },
-        { label: "Fib Target Extensions", value: `${formatPrice(structural.ext1272_TP1, symbol)} / ${formatPrice(structural.ext1618_TP2, symbol)}` },
+        { label: "Range Midpoint (50%)", value: `${formatPrice(structural.equilibrium50, symbol)} (${currentZone})`, highlight: fibFilterPassed },
+        { label: "Best Pullback Zone", value: `${formatPrice(Math.min(structural.ote618, structural.ote786), symbol)} – ${formatPrice(Math.max(structural.ote618, structural.ote786), symbol)}` },
+        { label: isScalp ? "Scalp Entry Price" : "Normal Entry Price", value: formatPrice(isScalp ? scalpEntry : rawNormalEntry, symbol), highlight: true },
+        { label: "Primary Targets (TP1 / TP2)", value: `${formatPrice(isScalp ? scalpTP1 : normalTP1, symbol)} / ${formatPrice(isScalp ? scalpTP2 : normalTP2, symbol)}` },
       ],
     },
     {
       id: "price-action",
       moduleNumber: 3,
-      title: "Institutional Candlestick & POI Confirmation",
+      title: "Candlestick & Price Action Confirmation",
       aligned: mod3Aligned,
       score: mod3Score,
       maxScore: 15,
       summary: mod3Aligned
-        ? `Confirmed ${structural.detectedPattern} inside valid ${currentZone} POI.`
-        : `Awaiting confirmed displacement or sweep candle inside ${isBullish ? "Discount" : "Premium"} POI (${structural.detectedPattern}).`,
+        ? `Confirmed ${structural.detectedPattern} supporting a ${isBullish ? "BUY" : "SELL"} setup.`
+        : `Monitoring live candle close for stronger confirmation (${structural.detectedPattern}).`,
       metrics: [
-        { label: "Closed-Bar Trigger", value: structural.detectedPattern, highlight: structural.hasStrongCandleTrigger },
-        { label: "POI Proximity", value: isInsideEntryZone ? "Inside Active PD Array" : fibFilterPassed ? "Inside Dealing Zone" : "Outside POI" },
-        { label: "Volatility Expansion", value: structural.volumeExpansion ? "Above Average Range/Vol" : "Normal / Compressed", highlight: structural.volumeExpansion },
-        { label: "Live Spot Price", value: formatPrice(currentPrice, symbol) },
+        { label: "Latest Candle Signal", value: structural.detectedPattern, highlight: structural.hasStrongCandleTrigger },
+        { label: "Zone Position", value: isInsideEntryZone ? "Right at Entry Zone" : fibFilterPassed ? "Good Pullback Area" : "Near Live Price" },
+        { label: "Momentum / Volume", value: structural.volumeExpansion ? "Strong Expansion" : "Steady / Normal", highlight: structural.volumeExpansion },
+        { label: "Current Live Price", value: formatPrice(currentPrice, symbol) },
       ],
     },
     {
@@ -1297,10 +1370,10 @@ export function evaluateLiveTick(
       moduleNumber: 4,
       title:
         symbol.marketType === "CRYPTO_PERP"
-          ? "Crypto Perps Orderflow (OI Δ, Funding & CVD)"
+          ? "Crypto Momentum (Funding, Open Interest & Flow)"
           : symbol.marketType === "SYNTHETIC"
-          ? "Synthetic Z-Score & Pre-Spike Compression"
-          : "Forex Macro SMT Divergence & Session Filter",
+          ? "Synthetic Volatility & Spike Watch"
+          : "Session Activity & Pair Correlation",
       aligned: mod4Aligned,
       score: mod4Score,
       maxScore: 20,
@@ -1310,44 +1383,88 @@ export function evaluateLiveTick(
     {
       id: "risk-execution",
       moduleNumber: 5,
-      title: "Dynamic Risk & Structural Invalidation Gate",
+      title: isScalp ? "Scalp Stop Loss & Fast Profit Check" : "Normal Trade Risk & Target Check",
       aligned: mod5Aligned,
       score: mod5Score,
       maxScore: 15,
-      summary: mod5Aligned
-        ? `Asymmetric risk profile verified: 1:${rrNumeric} R:R to TP2 with 0.35× ATR structural stop-hunt buffer.`
-        : `Insufficient Risk-to-Reward (1:${rrNumeric} < 1:2.0 minimum). Trade gated to WAIT until deeper OTE retest.`,
+      summary: isScalp
+        ? `Scalp setup ready: 1:${scalpRR} R:R to TP2 with tight ${formatPrice(scalpRisk, symbol)} Stop Loss (est. hold 5–45 mins).`
+        : `Normal trade setup ready: 1:${normalRR} R:R to TP2 with ${formatPrice(normalRisk, symbol)} Stop Loss (est. hold 2–24 hrs).`,
       metrics: [
-        { label: "Optimal Entry", value: formatPrice(structural.optimalEntry, symbol), highlight: true },
-        { label: "Structural SL (+0.35 ATR)", value: formatPrice(structural.invalidationSL, symbol) },
-        { label: "True Computed R:R", value: `1:${rrNumeric} (TP2)`, highlight: mod5Aligned },
-        { label: "Execution Gate", value: mod5Aligned ? "PASS (≥ 1:2.0)" : "BLOCKED (< 1:2.0)", highlight: mod5Aligned },
+        { label: isScalp ? "Scalp Entry" : "Normal Entry", value: formatPrice(isScalp ? scalpEntry : rawNormalEntry, symbol), highlight: true },
+        { label: "Stop Loss", value: formatPrice(isScalp ? scalpSL : normalSL, symbol) },
+        { label: "Risk-to-Reward (TP2)", value: `1:${activeRR}`, highlight: mod5Aligned },
+        { label: "Setup Check", value: mod5Aligned ? `PASS (≥ 1:${minRequiredRR})` : "LOW R:R", highlight: mod5Aligned },
       ],
     },
   ];
 
   const totalScore = modules.reduce((sum, m) => sum + m.score, 0);
   const alignedModulesCount = modules.filter((m) => m.aligned).length;
-  const highProbabilityTrigger =
-    alignedModulesCount >= 3 && mod5Aligned && structural.rawBias !== "RANGING";
+  const minAlignedNeeded = isScalp ? 2 : 3;
+  const highProbabilityTrigger = alignedModulesCount >= minAlignedNeeded && mod5Aligned;
 
   const directionalBias: QuantitativeEvaluation["directionalBias"] = highProbabilityTrigger
     ? isBullish
       ? "BULLISH"
       : "BEARISH"
-    : "NEUTRAL (WAIT FOR LIQUIDITY SWEEP)";
+    : "WAIT (NO CLEAN SETUP)";
+
+  const scalpPlan: StyleTradePlan = {
+    style: "SCALP",
+    label: "Scalp Setup (Quick In & Out)",
+    holdTime: "5 – 45 mins",
+    orderType: highProbabilityTrigger
+      ? isBullish
+        ? "BUY NOW / LIMIT"
+        : "SELL NOW / LIMIT"
+      : "WAIT",
+    entry: scalpEntry,
+    entryZoneLow: scalpZoneLow,
+    entryZoneHigh: scalpZoneHigh,
+    stopLoss: scalpSL,
+    tp1: scalpTP1,
+    tp2: scalpTP2,
+    tp3: scalpTP3,
+    riskRewardRatio: `1:${scalpRR}`,
+    rrNumeric: scalpRR,
+    stopNote: `Tight 1.05× ATR scalp SL (${formatPrice(scalpRisk, symbol)} risk)`,
+  };
+
+  const normalPlan: StyleTradePlan = {
+    style: "NORMAL",
+    label: "Normal Trade (Day / Swing)",
+    holdTime: "2 – 24 hours",
+    orderType: highProbabilityTrigger
+      ? isBullish
+        ? "BUY LIMIT"
+        : "SELL LIMIT"
+      : "WAIT",
+    entry: rawNormalEntry,
+    entryZoneLow: Math.min(normalZoneLow, rawNormalEntry),
+    entryZoneHigh: Math.max(normalZoneHigh, rawNormalEntry),
+    stopLoss: normalSL,
+    tp1: normalTP1,
+    tp2: normalTP2,
+    tp3: normalTP3,
+    riskRewardRatio: `1:${normalRR}`,
+    rrNumeric: normalRR,
+    stopNote: `Safe swing SL beyond recent structure (${formatPrice(normalRisk, symbol)} risk)`,
+  };
+
+  const activePlan = isScalp ? scalpPlan : normalPlan;
 
   const formulaParts = [
+    isScalp ? "Scalp Mode" : "Normal Trade Mode",
     structureEventLabelMap[structural.structureEvent],
-    pdArrayType,
-    fibFilterPassed ? `${currentZone} OTE` : "Awaiting OTE",
-    dynamicSweepActive ? "Sweep Active" : `1:${rrNumeric} R:R`,
+    `1:${activePlan.rrNumeric} R:R`,
   ];
-  const confluenceFormulaBanner = `${formulaParts.join(" + ")} = ${totalScore}% Confluence (${alignedModulesCount}/5 Aligned)`;
+  const confluenceFormulaBanner = `${formulaParts.join(" · ")} — ${totalScore}% Setup Score (${alignedModulesCount}/5 Checks Passed)`;
 
   return {
     symbol,
     timeframe,
+    tradingStyle,
     evaluatedAt: new Date().toISOString(),
     directionalBias,
     confluenceScorePct: totalScore,
@@ -1362,9 +1479,9 @@ export function evaluateLiveTick(
       ote618: structural.ote618,
       ote705SweetSpot: structural.ote705SweetSpot,
       ote786: structural.ote786,
-      ext1272_TP1: structural.ext1272_TP1,
-      ext1618_TP2: structural.ext1618_TP2,
-      ext2000_TP3: structural.ext2000_TP3,
+      ext1272_TP1: activePlan.tp1,
+      ext1618_TP2: activePlan.tp2,
+      ext2000_TP3: activePlan.tp3,
       currentZone,
       filterPassed: fibFilterPassed,
       filterExplanation: modules[1].summary,
@@ -1383,8 +1500,8 @@ export function evaluateLiveTick(
       asianLow: structural.asianLow,
       liquiditySweepDetected: dynamicSweepActive,
       sweepDescription: dynamicSweepActive
-        ? `Active liquidity sweep detected near ${formatPrice(isBullish ? structural.sslPool : structural.bslPool, symbol)}.`
-        : `Resting ${isBullish ? "SSL" : "BSL"} mapped at ${formatPrice(isBullish ? structural.sslPool : structural.bslPool, symbol)}.`,
+        ? `Recent fakeout / wick rejection spotted near ${formatPrice(isBullish ? structural.sslPool : structural.bslPool, symbol)}.`
+        : `Key ${isBullish ? "support low" : "resistance high"} watched at ${formatPrice(isBullish ? structural.sslPool : structural.bslPool, symbol)}.`,
       killzoneWindow: killzone.windowName,
       killzoneActive: killzone.active,
     },
@@ -1401,28 +1518,34 @@ export function evaluateLiveTick(
       patternName: structural.detectedPattern,
       insideHTFPOI: mod3Aligned,
       volumeExpansion: structural.volumeExpansion,
-      filteredOutReason: mod3Aligned ? undefined : "Not yet confirmed inside Discount/Premium POI",
+      filteredOutReason: mod3Aligned ? undefined : "Waiting for a clearer candle close near the entry zone",
       details: modules[2].summary,
     },
+    tradePlans: {
+      scalp: scalpPlan,
+      normal: normalPlan,
+    },
     executionCard: {
-      orderType: highProbabilityTrigger ? (isBullish ? "BUY LIMIT" : "SELL LIMIT") : "WAIT (NO TRIGGER)",
-      entryZoneLow: structural.entryLow,
-      entryZoneHigh: structural.entryHigh,
-      optimalEntry705: structural.optimalEntry,
-      invalidationSL: structural.invalidationSL,
-      atrBufferApplied: `0.35× ATR Buffer (+${formatPrice(structural.atr * 0.35, symbol)}) Beyond Structural Origin`,
-      tp1_1272: structural.ext1272_TP1,
-      tp2_1618: structural.ext1618_TP2,
-      tp3_2000: structural.ext2000_TP3,
-      riskRewardRatio: `1:${rrNumeric}`,
-      rrNumeric,
+      orderType: activePlan.orderType,
+      styleLabel: activePlan.label,
+      holdTime: activePlan.holdTime,
+      entryZoneLow: activePlan.entryZoneLow,
+      entryZoneHigh: activePlan.entryZoneHigh,
+      optimalEntry705: activePlan.entry,
+      invalidationSL: activePlan.stopLoss,
+      atrBufferApplied: activePlan.stopNote,
+      tp1_1272: activePlan.tp1,
+      tp2_1618: activePlan.tp2,
+      tp3_2000: activePlan.tp3,
+      riskRewardRatio: activePlan.riskRewardRatio,
+      rrNumeric: activePlan.rrNumeric,
     },
   };
 }
 
 /**
- * Builds a clean, compact JSON payload of exact computed SMC mathematics
- * to feed into the Hybrid Quant + Gemini Vision backend.
+ * Builds a clean, compact JSON payload of exact computed price-action mathematics
+ * to feed into the Hybrid AI Chart Analyzer backend.
  */
 export function buildQuantContextPayload(
   evaluation: QuantitativeEvaluation,
@@ -1443,6 +1566,7 @@ export function buildQuantContextPayload(
     assetName: evaluation.symbol.name,
     marketType: evaluation.symbol.marketType,
     timeframe: evaluation.timeframe,
+    tradingStyle: evaluation.tradingStyle,
     livePrice,
     directionalBias: evaluation.directionalBias,
     confluenceScorePct: evaluation.confluenceScorePct,
@@ -1465,6 +1589,7 @@ export function buildQuantContextPayload(
     smtDivergence: evaluation.smtDivergence,
     syntheticMetrics: evaluation.syntheticMetrics || null,
     candlestickTrigger: evaluation.candlestickTrigger,
+    tradePlans: evaluation.tradePlans,
     executionCard: evaluation.executionCard,
     rsiDivergences: rsiDivergences.slice(-2),
     moduleBreakdown: evaluation.modules.map((m) => ({
@@ -1493,7 +1618,8 @@ export function evaluateMultiFactorConfluence(
   candles?: StandardCandle[],
   futuresTelemetry?: FuturesTelemetry | null,
   mtfCandles?: MultiTimeframeCandles | null,
-  smtReference?: SmtReferenceData | null
+  smtReference?: SmtReferenceData | null,
+  tradingStyle: TradingStyle = "NORMAL"
 ): QuantitativeEvaluation {
   const safeCandles: StandardCandle[] = candles && candles.length > 0 ? candles : [];
   const structural = evaluateStructuralScan(
@@ -1519,5 +1645,5 @@ export function evaluateMultiFactorConfluence(
     isClosed: false,
   };
 
-  return evaluateLiveTick(liveCandle, structural, futuresTelemetry);
+  return evaluateLiveTick(liveCandle, structural, futuresTelemetry, tradingStyle);
 }

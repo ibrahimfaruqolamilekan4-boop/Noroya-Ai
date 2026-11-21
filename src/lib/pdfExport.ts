@@ -373,7 +373,7 @@ export async function exportTradeToPDF(trade: Trade) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
     doc.setTextColor(100, 116, 139);
-    const obType = ai.orderBlock?.type ? `OB Segment: ${ai.orderBlock.type}` : "Price block representing high institutional liquidity pooling";
+    const obType = ai.orderBlock?.type ? `Key Zone: ${ai.orderBlock.type}` : "Strong buy/sell zone where price previously reversed";
     doc.text(obType, marginX + subColW + 6, gridA_Y + 16);
 
     yOffset += (itemHeight * 3) + 4;
@@ -396,8 +396,8 @@ export async function exportTradeToPDF(trade: Trade) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8);
       doc.setTextColor(71, 85, 105);
-      doc.text("INSTITUTIONAL SUPPLY ZONE", marginX + 4, sY + 5.5);
-      doc.text("INSTITUTIONAL DEMAND ZONE", marginX + subColW + 6, sY + 5.5);
+      doc.text("KEY RESISTANCE / SUPPLY ZONE", marginX + 4, sY + 5.5);
+      doc.text("KEY SUPPORT / DEMAND ZONE", marginX + subColW + 6, sY + 5.5);
 
       doc.setFont("helvetica", "bold");
       doc.setFontSize(8.5);

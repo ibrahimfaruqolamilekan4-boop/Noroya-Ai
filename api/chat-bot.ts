@@ -104,20 +104,20 @@ export default async function handler(req: any, res: any) {
     const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
     const ai = getGeminiClient(customKey);
 
-    let companionDirective = `You are a disciplined, institutional SMC (Smart Money Concepts) Mentor and Chief Risk Officer specializing in:
-1. Forex Majors & Crosses (Anti-SL hunting buffers behind displacement origins, 50% Premium/Discount rule, London Judas Swings, NY AM Silver Bullet 10:00–11:00 EST, paired SMT Divergence).
-2. Metals & Global Indices (XAU/USD psychological handles, US100/US500 SMT correlation, Asian range sweeps).
-3. Crypto Perpetual Futures (Bybit Funding Rates, 24h Open Interest Δ 4-quadrant regimes, live tape CVD absorption/distribution, CME gaps).
-4. Deriv Synthetic Indices (20-period Z-Score ±2.5σ mean reversion on Volatility indices, pre-spike compression & inter-spike intervals on Boom/Crash).
+    let companionDirective = `You are a practical, plain-spoken Trading Coach helping an everyday retail trader analyze Scalp Setups (quick M1–M15 trades with tight Stop Loss and fast targets) and Normal Trading Setups (intraday & swing trades on M15–H4) across:
+1. Forex Pairs & Gold/Metals (trend direction, support/resistance, fakeout wicks, London & New York trading hours, safe Stop Loss placement).
+2. Global Stock Indices (US100, US30, US500, DAX momentum and pullback entries).
+3. Crypto Futures (funding rate, open interest, buying/selling pressure, clean breakout & pullback setups).
+4. Deriv Synthetic Indices (Volatility indices trend/pullback setups and Boom/Crash spike timing).
 
-Always emphasize capital preservation, strict >= 1:2.0 Risk:Reward, and standing aside (WAIT) when confluence is weak.
-Active instrument on screen: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General"}.
+Speak in clear, simple trading language — avoid heavy institutional bank jargon. Focus on practical entry zones, Stop Loss protection, realistic Take Profits, and simple risk management (0.5%–1% risk per trade).
+Active market on screen: ${activeSymbol ? `${activeSymbol.name} (${activeSymbol.ticker})` : "General"}.
 `;
 
     if (educationalMode) {
-      companionDirective += `EDUCATIONAL MODE: Explain mechanical SMC rules clearly with structured bullets and optional short comprehension checks.\n`;
+      companionDirective += `COACHING MODE: Explain trading setups simply with clear bullet points and practical examples.\n`;
     } else {
-      companionDirective += `TACTICAL MODE: Be concise and precise with exact invalidation, OTE entry, and partial-profit management.\n`;
+      companionDirective += `QUICK TRADE MODE: Keep replies short, direct, and focused on Entry, Stop Loss, Take Profit, and what to watch next.\n`;
     }
 
     if (currentAnalysis) {

@@ -159,7 +159,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
           <div className="lg:col-span-5 flex flex-col justify-between space-y-8">
             <div className="space-y-5">
               <div className="flex items-center gap-2 text-xs font-medium text-emerald-700">
-                <span>Institutional Quantitative Desk</span>
+                <span>Scalp &amp; Normal Trade Analyzer</span>
                 <span aria-hidden="true">·</span>
                 <span>Forex</span>
                 <span aria-hidden="true">·</span>
@@ -172,11 +172,11 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                 className="font-display font-bold text-slate-900 tracking-tight leading-[1.1]"
                 style={{ fontSize: "clamp(2.25rem, 3.8vw, 3.5rem)", textWrap: "balance" }}
               >
-                Precision Multi-Asset SMC &amp; Orderflow Execution Terminal
+                Clear Scalp &amp; Normal Trading Setups Across Every Market
               </h1>
 
               <p className="text-slate-600 text-base leading-relaxed max-w-[62ch]">
-                Analyze Standard Forex Pairs, 24/7 Synthetic Indices, and Bybit/Binance Perpetual Futures using a deterministic 5-Module Confluence Scoring System (0–100%). High-probability alerts trigger strictly when at least 3 of 5 institutional modules align.
+                Analyze Forex Pairs, 24/7 Synthetic Indices, and Crypto Perpetuals with a practical 5-Check Setup Engine (0–100%). Choose between quick Scalp Setups (5–45 mins) or Normal Day/Swing Setups (2–24 hrs) with exact Entry, safe Stop Loss, and realistic Take Profits.
               </p>
             </div>
 
@@ -378,10 +378,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
               Multi-Asset Quantitative Coverage
             </div>
             <h2 className="text-2xl md:text-3xl font-bold font-display text-slate-900 tracking-tight">
-              Three Specialized Institutional Market Engines
+              Three Specialized Trading Market Engines
             </h2>
             <p className="text-sm text-slate-600 leading-relaxed">
-              Each asset class exhibits distinct liquidity distribution and microstructure mechanics. Select any market below to launch directly into the live analysis terminal.
+              Each market moves differently. Select any asset class below to jump straight into live Scalp &amp; Normal Trade setups.
             </p>
           </div>
 
@@ -399,7 +399,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
                   Major, Minor &amp; Exotic Pairs
                 </h3>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Engineered around ICT London Open (02:00–05:00 EST), New York Open (07:00–10:00 EST), and Silver Bullet (10:00–11:00 EST) Killzones with Asian session Judas swing detection and SMT correlation filtering.
+                  Built around active London and New York trading sessions with clear support/resistance zones, fakeout/stop-hunt alerts, and realistic intraday scalp or swing targets.
                 </p>
                 <div className="pt-2 space-y-1.5 text-xs font-mono text-slate-700">
                   <div>Majors &amp; Crosses: EUR/USD · GBP/USD · USD/JPY · XAU/USD · GBP/JPY</div>
@@ -492,71 +492,71 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
             Multi-Factor Scoring System (0–100%)
           </div>
           <h2 className="text-2xl md:text-3xl font-bold font-display text-slate-900 tracking-tight">
-            Five Institutional Confluence Modules
+            Five Clear Trade Checks Before You Enter
           </h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            A trade setup only triggers a High Probability execution alert when at least 3 of the 5 quantitative modules align and Risk-to-Reward exceeds 1:2.5.
+            A trade setup only lights up as High Probability when at least 3 of the 5 checks line up and the risk-to-reward makes sense for your chosen Scalp or Normal style.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="md:col-span-2 bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
-              01. Smart Money Concepts (SMC) &amp; ICT Framework
+              01. Multi-Timeframe Trend &amp; Key Zones
             </span>
             <h3 className="text-lg font-bold font-display text-slate-900">
-              Multi-Timeframe BOS, CHoCH, MSS &amp; Liquidity Sweeps
+              Trend Alignment, Support/Resistance &amp; Fakeout Filter
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Automated structural mapping across Higher Timeframes (4H/1D) and Lower Timeframes (15M/5M/1M). Identifies unmitigated Order Blocks (OB), Fair Value Gaps (FVG), Breaker Blocks, and Equal High/Low liquidity pools (BSL/SSL), requiring a confirmed Judas Swing sweep before entry.
+              Automatically checks the higher timeframe trend (4H/1D) alongside your entry chart (15M/5M/1M). Highlights clean support/resistance zones, price gaps, and recent stop-hunt wicks so you don&apos;t chase bad entries.
             </p>
           </div>
 
           <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
-              02. Advanced Fibonacci Confluence
+              02. Smart Pullback Entry Filter
             </span>
             <h3 className="text-lg font-bold font-display text-slate-900">
-              0.705 OTE &amp; Equilibrium Filter
+              Buy Low, Sell High Pullback Zone
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Strictly filters for Longs in Discount (&lt;0.50) and Shorts in Premium (&gt;0.50), highlighting the 0.618–0.786 OTE zone (0.705 institutional sweet spot) and projecting 1.272, 1.618, and 2.0 extensions for TP1–TP3.
+              Avoids buying at the top or selling at the bottom by checking whether price has pulled back into a fair value entry zone before projecting realistic TP1, TP2, and TP3 targets.
             </p>
           </div>
 
           <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
-              03. Institutional Price Action
+              03. Candle Confirmation
             </span>
             <h3 className="text-lg font-bold font-display text-slate-900">
-              POI-Gated Candlestick Triggers
+              Clear Candlestick Entry Triggers
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Detects Engulfing volume expansions, Liquidity-Sweep Pin Bars, and Three-Bar Reversals occurring strictly inside HTF Point of Interest zones while rejecting mid-range noise.
+              Spots strong engulfing candles, rejection pin bars, and momentum shifts right at key levels while filtering out choppy mid-range candles.
             </p>
           </div>
 
           <div className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
-              04. Asset-Specific Quantitative Filters
+              04. Asset-Specific Filters
             </span>
             <h3 className="text-lg font-bold font-display text-slate-900">
-              CVD Divergences, OI Flushes &amp; Tick Bases
+              Crypto Flow, Volatility &amp; Spike Timing
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Combines SMC structure with Cumulative Volume Delta (CVD) and Open Interest liquidation flushes on Crypto Perps, and pre-spike consolidation bases + volatility bands on Synthetics.
+              Combines trend structure with live buying/selling pressure and funding rates on Crypto Perps, and spike/volatility guards on Synthetic Indices.
             </p>
           </div>
 
           <div id="execution-architecture" className="bg-[#F1F4F8] border border-slate-300/90 rounded-xl p-6 space-y-3">
             <span className="text-xs font-mono font-semibold text-emerald-700">
-              05. Dynamic Risk &amp; Execution Output
+              05. Scalp &amp; Normal Trade Cards
             </span>
             <h3 className="text-lg font-bold font-display text-slate-900">
-              Structured Trade Card (Min 1:2.5 R:R)
+              Ready-to-Use Entry, SL &amp; TP1–TP3
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Outputs exact Entry Zone, ATR-buffered structural Stop Loss, and tiered TP1/TP2/TP3 targets with automated position sizing and trade journaling.
+              Switch between a fast Scalp Setup (5–45 mins) and a Normal Trade Setup (2–24 hrs) with ATR-protected Stop Loss, tiered targets, lot size calculator, and trade journal.
             </p>
           </div>
         </div>
@@ -566,13 +566,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
           <div className="space-y-1.5">
             <div className="flex items-center gap-2 text-xs text-emerald-300 font-medium">
               <ShieldCheck className="h-4 w-4" />
-              <span>Zero-Login Institutional Access</span>
+              <span>Instant Zero-Login Access</span>
             </div>
             <h3 className="text-xl font-bold font-display text-white">
-              Ready to Execute Quantitative Multi-Asset Analysis?
+              Ready to Find Your Next Scalp or Normal Trade Setup?
             </h3>
             <p className="text-xs text-emerald-100/80 max-w-xl">
-              Immediate access to the live chart terminal, 5-module confluence scanner, mechanical risk calculator, and cloud trade journal — no login wall required.
+              Jump straight into the live chart terminal, Scalp &amp; Normal trade scanner, lot size calculator, and trade journal — no login or API key prompt required.
             </p>
           </div>
           <button
@@ -589,7 +589,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLaunchDashboard }) =
 
       {/* QUIET FOOTER */}
       <footer className="mt-auto border-t border-slate-300 bg-[#ECEFF4] py-6 px-6 md:px-12 text-xs text-slate-600 flex flex-col sm:flex-row items-center justify-between gap-4">
-        <span>QuantSMC Institutional Multi-Asset Analyzer · Standalone PWA Terminal</span>
+        <span>QuantSMC Scalp &amp; Normal Trade Analyzer · Standalone PWA Terminal</span>
         <span>Forex · Synthetic Indices · Crypto Futures (Bybit/Perpetuals)</span>
       </footer>
     </div>

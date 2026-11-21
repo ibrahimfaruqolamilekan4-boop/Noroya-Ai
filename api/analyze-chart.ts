@@ -1,5 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 
+type TradingStyle = "SCALP" | "NORMAL";
+
 function getGeminiClient(customKey?: string): GoogleGenAI {
   const rawKey =
     customKey ||
@@ -35,7 +37,6 @@ async function generateGeminiContent(
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         const sanitizedConfig = { ...(params.config || {}) };
-        // Gemini 4 series rejects deprecated sampling parameters
         if (modelName.startsWith("gemini-4")) {
           delete sanitizedConfig.temperature;
           delete sanitizedConfig.topP;
@@ -84,29 +85,29 @@ function getSessionWindows() {
   const nyDecimal = nyHour + nyMin / 60;
 
   let killZoneStatus: "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-  let killZoneName = "Outside Killzone (Consolidation)";
+  let killZoneName = "Quiet / Off-Peak Session";
   if (nyDecimal >= 2.0 && nyDecimal <= 5.0) {
     killZoneStatus = "ACTIVE_LONDON";
-    killZoneName = "London Open Killzone (02:00–05:00 EST)";
+    killZoneName = "London Open Session (02:00–05:00 EST)";
   } else if (nyDecimal >= 7.0 && nyDecimal <= 10.5) {
     killZoneStatus = "ACTIVE_NY";
-    killZoneName = "New York AM Killzone (07:00–10:30 EST)";
+    killZoneName = "New York Morning Session (07:00–10:30 EST)";
   } else if (nyDecimal >= 14.0 && nyDecimal <= 16.0) {
     killZoneStatus = "ACTIVE_NY_PM";
-    killZoneName = "NY PM / London Close Window (14:00–16:00 EST)";
+    killZoneName = "New York Afternoon Session (14:00–16:00 EST)";
   }
 
   let silverBulletStatus: "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE" = "INACTIVE";
-  let silverBulletName = "Inactive";
+  let silverBulletName = "Normal Liquidity Window";
   if (nyHour === 3) {
     silverBulletStatus = "ACTIVE_LONDON";
-    silverBulletName = "London Open Silver Bullet (03:00–04:00 EST)";
+    silverBulletName = "High-Volume London Hour (03:00–04:00 EST)";
   } else if (nyHour === 10) {
     silverBulletStatus = "ACTIVE_NY_AM";
-    silverBulletName = "NY AM Silver Bullet (10:00–11:00 EST)";
+    silverBulletName = "High-Volume NY Hour (10:00–11:00 EST)";
   } else if (nyHour === 14) {
     silverBulletStatus = "ACTIVE_NY_PM";
-    silverBulletName = "NY PM Silver Bullet (14:00–15:00 EST)";
+    silverBulletName = "NY Afternoon Push (14:00–15:00 EST)";
   }
 
   return { nyTimeStr, killZoneStatus, killZoneName, silverBulletStatus, silverBulletName };
@@ -115,37 +116,74 @@ function getSessionWindows() {
 function buildDeterministicQuantReport(
   symbol: string,
   timeframe: string,
+  tradingStyle: TradingStyle,
   currentPrice?: number,
   quantContext?: any,
   reasonNote?: string
 ) {
   const { killZoneStatus, killZoneName, silverBulletStatus, silverBulletName } = getSessionWindows();
+  const isScalp = tradingStyle === "SCALP";
+  const styleTitle = isScalp ? "Scalp Setup" : "Normal Trade Setup";
+  const holdTime = isScalp ? "5 – 45 mins" : "2 – 24 hours";
 
   if (quantContext && quantContext.executionCard && quantContext.fibonacci) {
     const q = quantContext;
+    const plans = q.tradePlans || {};
+    const activePlan = isScalp ? plans.scalp || q.executionCard : plans.normal || q.executionCard;
     const exec = q.executionCard;
     const fib = q.fibonacci;
     const struct = q.structure || {};
     const mtf = q.mtf || {};
-    const primaryOb = Array.isArray(q.orderBlocks) && q.orderBlocks.length > 0 ? q.orderBlocks[q.orderBlocks.length - 1] : null;
-    const primaryFvg = Array.isArray(q.fairValueGaps) && q.fairValueGaps.length > 0 ? q.fairValueGaps[q.fairValueGaps.length - 1] : null;
+    const primaryOb =
+      Array.isArray(q.orderBlocks) && q.orderBlocks.length > 0
+        ? q.orderBlocks[q.orderBlocks.length - 1]
+        : null;
+    const primaryFvg =
+      Array.isArray(q.fairValueGaps) && q.fairValueGaps.length > 0
+        ? q.fairValueGaps[q.fairValueGaps.length - 1]
+        : null;
 
     const isBull = q.directionalBias === "BULLISH";
     const isBear = q.directionalBias === "BEARISH";
     const bias: "BULLISH" | "BEARISH" | "NEUTRAL" = isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL";
-    const setupType: "BUY" | "SELL" | "WAIT" =
-      exec.orderType === "BUY LIMIT" ? "BUY" : exec.orderType === "SELL LIMIT" ? "SELL" : "WAIT";
+    const rawOrderType = String(activePlan.orderType || exec.orderType || "WAIT");
+    const setupType: "BUY" | "SELL" | "WAIT" = rawOrderType.includes("BUY")
+      ? "BUY"
+      : rawOrderType.includes("SELL")
+      ? "SELL"
+      : "WAIT";
 
     const roundVal = (n: number) => {
       const ref = Number(q.livePrice || currentPrice || 1);
       return Number(Number(n || 0).toFixed(ref < 5 ? 5 : ref < 50 ? 3 : 2));
     };
 
-    const entry = roundVal(exec.optimalEntry705);
-    const stopLoss = roundVal(exec.invalidationSL);
-    const tp1 = roundVal(exec.tp1_1272);
-    const tp2 = roundVal(exec.tp2_1618);
-    const tp3 = roundVal(exec.tp3_2000);
+    const entry = roundVal(activePlan.entry ?? exec.optimalEntry705);
+    const stopLoss = roundVal(activePlan.stopLoss ?? exec.invalidationSL);
+    const tp1 = roundVal(activePlan.tp1 ?? exec.tp1_1272);
+    const tp2 = roundVal(activePlan.tp2 ?? exec.tp2_1618);
+    const tp3 = roundVal(activePlan.tp3 ?? exec.tp3_2000);
+    const rrStr = activePlan.riskRewardRatio || exec.riskRewardRatio || (isScalp ? "1:1.8" : "1:2.5");
+
+    const formatPlan = (p: any, fallbackStyle: TradingStyle) =>
+      p
+        ? {
+            style: fallbackStyle,
+            label: p.label || (fallbackStyle === "SCALP" ? "Scalp Setup (Quick In & Out)" : "Normal Trade (Day / Swing)"),
+            holdTime: p.holdTime || (fallbackStyle === "SCALP" ? "5 – 45 mins" : "2 – 24 hours"),
+            type: String(p.orderType || "").includes("BUY")
+              ? "BUY"
+              : String(p.orderType || "").includes("SELL")
+              ? "SELL"
+              : "WAIT",
+            entry: roundVal(p.entry),
+            stopLoss: roundVal(p.stopLoss),
+            tp1: roundVal(p.tp1),
+            tp2: roundVal(p.tp2),
+            tp3: roundVal(p.tp3),
+            riskRewardRatio: p.riskRewardRatio || "1:1.8",
+          }
+        : undefined;
 
     const dealingPos =
       fib.currentZone === "DISCOUNT"
@@ -162,22 +200,29 @@ function buildDeterministicQuantReport(
 
     return {
       engineMode: "DETERMINISTIC_QUANT_ENGINE",
-      modelUsed: "QuantSMC Local Mathematical Engine",
-      engineNotice: reasonNote || "Generated directly from live OHLC mathematical structure.",
+      modelUsed: "Live Price-Action Math Engine",
+      engineNotice: reasonNote || "Generated directly from live OHLC candle data.",
+      tradingStyle,
+      styleLabel: styleTitle,
+      estimatedHoldTime: holdTime,
       imageQuality: {
         status: "passed",
-        details: `Computed directly from live ${symbol} (${timeframe}) OHLC candles, 5-bar fractal swings, and MTF D1/H4 feeds.`,
+        details: `Computed directly from live ${symbol} (${timeframe}) candles and higher-timeframe trend check.`,
       },
       bias,
-      marketStructure: `${struct.ltfStructure || "Range structure"} · HTF: ${struct.htfStructure || "Syncing"}`,
-      confluenceScore: Number(((q.confluenceScorePct || 50) / 20).toFixed(1)),
-      confluenceScorePct: q.confluenceScorePct || 50,
+      marketStructure: `${struct.ltfStructure || "Range structure"} · Higher TF: ${struct.htfStructure || "Syncing"}`,
+      confluenceScore: Number(((q.confluenceScorePct || 55) / 20).toFixed(1)),
+      confluenceScorePct: q.confluenceScorePct || 55,
       alignedModulesCount: q.alignedModulesCount || 0,
-      confluenceFormula: q.confluenceFormula || "Mathematical 5-Module SMC Evaluation",
+      confluenceFormula: q.confluenceFormula || `${styleTitle} Live Technical Evaluation`,
+      scalpPlan: formatPlan(plans.scalp, "SCALP"),
+      normalPlan: formatPlan(plans.normal, "NORMAL"),
       antiStopLossShield: {
         structuralInvalidationPrice: stopLoss,
         bufferPipsApplied: Number(Math.abs(entry - stopLoss).toFixed(entry < 5 ? 4 : 2)),
-        protectionRationale: `${exec.atrBufferApplied}. Placed behind confirmed structural displacement origin rather than obvious swing wicks.`,
+        protectionRationale: isScalp
+          ? `Tight scalp Stop Loss (${activePlan.stopNote || "1× ATR"}) placed just outside recent short-term swing noise so small wicks don't knock you out.`
+          : `Comfortable Stop Loss (${activePlan.stopNote || "1.5× ATR"}) placed safely behind the nearest swing support/resistance.`,
         dealingRangePosition: dealingPos,
       },
       killZone: {
@@ -185,31 +230,31 @@ function buildDeterministicQuantReport(
         windowName: killZoneName,
         details:
           killZoneStatus === "INACTIVE"
-            ? "Currently outside peak London/NY institutional killzones — expect tighter ranges or wait for session open."
-            : `Active ${killZoneName}. Monitor liquidity sweeps against Asian/PDH-PDL boundaries.`,
+            ? "Quieter market hours right now — keep targets realistic or wait for London/New York open for faster movement."
+            : `Active ${killZoneName} — good movement and tighter spreads for ${isScalp ? "quick scalps" : "day/swing entries"}.`,
       },
       silverBullet: {
         status: silverBulletStatus,
         windowName: silverBulletName,
         details:
           silverBulletStatus === "INACTIVE"
-            ? "No Silver Bullet hourly window active right now."
-            : `Active ${silverBulletName} — prioritize clean FVG rebalance entries.`,
+            ? "Steady normal volume window."
+            : `Peak hourly volatility (${silverBulletName}) — watch for quick momentum follow-through.`,
       },
       candleRangeTheory: {
         rangeHigh: roundVal(fib.swingHigh),
         rangeLow: roundVal(fib.swingLow),
         sweepType,
         deliveryDirection: bias,
-        description: struct.sweepDescription || "Monitoring dealing range boundaries for external liquidity sweep.",
+        description: struct.sweepDescription || "Watching recent high/low range for a clean breakout or fakeout rejection.",
       },
       judasSwing: {
         detected: Boolean(struct.liquiditySweepDetected),
         direction: bias,
         triggerLevel: roundVal(isBull ? struct.sslPool || fib.swingLow : struct.bslPool || fib.swingHigh),
         description: struct.liquiditySweepDetected
-          ? `Liquidity probe beyond ${roundVal(isBull ? struct.sslPool : struct.bslPool)} detected with rejection back into dealing range.`
-          : "No confirmed Judas Swing liquidity probe yet on current candle sequence.",
+          ? `Quick fakeout wick beyond ${roundVal(isBull ? struct.sslPool : struct.bslPool)} followed by rejection back into range.`
+          : "No recent fakeout wick detected on the latest candles.",
       },
       powerOf3: {
         detected: Boolean(struct.asianHigh && struct.asianLow),
@@ -221,67 +266,81 @@ function buildDeterministicQuantReport(
         distributionTarget: tp2,
         description:
           struct.asianHigh && struct.asianLow
-            ? "Asian session range mapped as Accumulation phase; monitor sweep for Manipulation and expansion toward TP2."
-            : "Dealing range mapped for Accumulation-Manipulation-Distribution sequencing.",
+            ? "Asian session range mapped; watch for a break above/below it to confirm today's direction."
+            : "Current price range mapped for breakout and pullback targets.",
       },
       multiTimeframe: {
         isMultiTimeframe: true,
-        htfBias1D: `${mtf.d1Bias || "RANGING"} — ${mtf.d1Event || "Syncing Daily structure"}`,
-        intermediateStructure4H: `${mtf.h4Bias || "RANGING"} — ${mtf.h4Event || "Syncing 4H structure"}`,
-        entryPrecision30M: `${struct.ltfStructure || timeframe} · Entry zone ${roundVal(exec.entryZoneLow)}–${roundVal(exec.entryZoneHigh)}`,
-        confirmationMessage: mtf.note || "Top-down MTF structural alignment computed from live candles.",
+        htfBias1D: `${mtf.d1Bias || "RANGING"} — ${mtf.d1Event || "Checking Daily trend"}`,
+        intermediateStructure4H: `${mtf.h4Bias || "RANGING"} — ${mtf.h4Event || "Checking 4H trend"}`,
+        entryPrecision30M: `${struct.ltfStructure || timeframe} · Entry near ${entry}`,
+        confirmationMessage: mtf.note || "Higher timeframe trend checked against your chart timeframe.",
       },
       suggestedRisk:
         setupType === "WAIT"
-          ? "0% — Stand aside. Setup does not meet >= 3/5 module confluence and >= 1:2.0 R:R gate."
-          : "0.5% to 1.0% risk per position. Scale 40% at TP1 and move SL to breakeven.",
+          ? "0% — Wait for a cleaner setup before entering."
+          : isScalp
+          ? "0.5%–1% risk per scalp. Take 50% profit at TP1, move Stop Loss to breakeven, and let the rest run to TP2."
+          : "1% max risk per trade. Secure partial profit at TP1, move Stop Loss to breakeven, and hold for TP2.",
       doActions:
         setupType === "WAIT"
           ? [
-              `Wait for price to retrace into ${isBull ? "Discount (<50%)" : "Premium (>50%)"} OTE zone (${roundVal(exec.entryZoneLow)}–${roundVal(exec.entryZoneHigh)}).`,
-              "Require a confirmed LTF BOS/CHoCH displacement candle after a liquidity sweep before deploying capital.",
-              "Verify at least 3 of 5 quantitative modules align with R:R >= 1:2.0.",
+              `Wait for price to pull back closer to ${entry} before entering.`,
+              "Look for a clean green/red candle close confirming direction.",
+              "Switch between Scalp and Normal mode if you want faster or wider targets.",
+            ]
+          : isScalp
+          ? [
+              `Enter ${setupType} near ${entry} with a tight Stop Loss at ${stopLoss}.`,
+              `Lock in 50% profit quickly at TP1 (${tp1}) and move SL to entry.`,
+              `Aim for TP2 (${tp2}) within ${holdTime} — don't overhold a scalp.`,
             ]
           : [
-              `Place disciplined ${exec.orderType} near ${entry} inside ${struct.pdArrayType}.`,
-              `Take partial profits at TP1 (${tp1}) and move SL to breakeven.`,
-              `Hold core runner toward TP2 (${tp2}) and TP3 (${tp3}).`,
+              `Place ${setupType} near ${entry} inside the key entry zone.`,
+              `Set Stop Loss at ${stopLoss} to protect your account.`,
+              `Take partial profits at TP1 (${tp1}) and let the main trade run to TP2 (${tp2}).`,
             ],
-      dontActions: [
-        "Do NOT chase mid-range candles in Equilibrium without an unmitigated OB or FVG.",
-        "Do NOT tighten Stop Loss inside the structural liquidity sweep wick.",
-        "Do NOT override the 1:2.0 minimum asymmetric Risk:Reward gate.",
-      ],
-      detailedVisualDescription: `Deterministic mathematical scan on ${symbol} (${timeframe}) at live price ${roundVal(q.livePrice || currentPrice)}. Found ${q.orderBlocks?.length || 0} active Order Block(s), ${q.fairValueGaps?.length || 0} open Fair Value Gap(s), and ${q.alignedModulesCount}/5 aligned quantitative modules (${q.confluenceScorePct}%).`,
+      dontActions: isScalp
+        ? [
+            "Do NOT widen your Stop Loss if a scalp goes against you — cut it fast.",
+            "Do NOT over-leverage on M1/M5 noise; stick to 0.5%–1% risk.",
+            "Do NOT turn a losing scalp into a long-term hold.",
+          ]
+        : [
+            "Do NOT chase a big spike candle after price has already moved far away.",
+            "Do NOT move your Stop Loss further away if price approaches invalidation.",
+            "Do NOT risk more than 1%–2% of your account on a single setup.",
+          ],
+      detailedVisualDescription: `${styleTitle} scan on ${symbol} (${timeframe}) at live price ${roundVal(q.livePrice || currentPrice)}. ${q.alignedModulesCount}/5 checks passed (${q.confluenceScorePct}% score) with ${rrStr} Risk-to-Reward.`,
       orderBlock: {
         priceRange: primaryOb
           ? `${roundVal(primaryOb.bottom)} – ${roundVal(primaryOb.top)}`
-          : `${roundVal(exec.entryZoneLow)} – ${roundVal(exec.entryZoneHigh)}`,
-        type: primaryOb ? `${primaryOb.type.replace(/_/g, " ")} (${primaryOb.status})` : struct.pdArrayType || "Order Block",
+          : `${roundVal(activePlan.entryZoneLow ?? exec.entryZoneLow)} – ${roundVal(activePlan.entryZoneHigh ?? exec.entryZoneHigh)}`,
+        type: primaryOb ? (primaryOb.type.includes("BULL") ? "Key Support / Buy Zone" : "Key Resistance / Sell Zone") : "Key Entry Zone",
         rationale: primaryOb
-          ? `Confirmed ${primaryOb.displacementAtrMultiple}x ATR displacement origin candle (${primaryOb.status.toLowerCase()}).`
-          : "Anchored to institutional OTE dealing range boundary.",
+          ? `Strong recent price reaction zone (${primaryOb.displacementAtrMultiple}x ATR move).`
+          : "Based on the nearest support/resistance pullback zone.",
       },
       supplyDemandZones: {
         supply: `${roundVal(fib.equilibrium50)} – ${roundVal(fib.swingHigh)}`,
         demand: `${roundVal(fib.swingLow)} – ${roundVal(fib.equilibrium50)}`,
-        activeZone: `${fib.currentZone} Zone`,
+        activeZone: `${fib.currentZone === "DISCOUNT" ? "Lower / Buy Value Area" : fib.currentZone === "PREMIUM" ? "Upper / Sell Value Area" : "Middle Range"}`,
       },
       liquidityVoid: {
         priceRange: primaryFvg
           ? `${roundVal(primaryFvg.bottom)} – ${roundVal(primaryFvg.top)}`
-          : "No open FVG above 0.15x ATR",
+          : "No major open price gap",
         description: primaryFvg
-          ? `${primaryFvg.type} FVG (${primaryFvg.status}) with 50% CE at ${roundVal(primaryFvg.midpointCE)}.`
-          : "Price delivery balanced; no wide unmitigated imbalance currently open.",
+          ? `Open ${primaryFvg.type.toLowerCase()} price gap (midpoint ${roundVal(primaryFvg.midpointCE)}) that price often revisits.`
+          : "Price action is balanced with no wide unfilled gap nearby.",
       },
       vacuumBlock: {
         priceRange: `${roundVal(Math.min(entry, stopLoss))} – ${roundVal(Math.max(entry, stopLoss))}`,
-        description: "Structural displacement origin protecting invalidation stop loss.",
+        description: "Stop-loss protection zone.",
       },
       candlestickPatterns: {
-        patternName: q.candlestickTrigger?.patternName || "Monitoring closed candle trigger",
-        context: q.candlestickTrigger?.details || "Evaluating closed-bar displacement near HTF POI.",
+        patternName: q.candlestickTrigger?.patternName || "Monitoring live candle close",
+        context: q.candlestickTrigger?.details || "Checking recent candles for momentum confirmation.",
       },
       fibonacciRetracement: {
         level_50: roundVal(fib.equilibrium50),
@@ -291,78 +350,83 @@ function buildDeterministicQuantReport(
         ext_1272: tp1,
         ext_1618: tp2,
         ext_2000: tp3,
-        description: fib.filterExplanation || "Fibonacci dealing range anchored to confirmed fractal swings.",
+        description: fib.filterExplanation || "Pullback retracement levels from recent swing high and low.",
       },
       tradeSetup: {
         type: setupType,
+        tradingStyle,
+        holdTime,
         entry,
         stopLoss,
         takeProfits: [tp1, tp2, tp3],
-        riskRewardRatio: exec.riskRewardRatio || "1:2.0",
+        riskRewardRatio: rrStr,
         rationale:
           setupType === "WAIT"
-            ? `Gated to WAIT: ${q.alignedModulesCount}/5 modules aligned (R:R ${exec.riskRewardRatio}). ${mtf.note || ""}`
-            : `${exec.orderType} triggered at ${entry} (${q.confluenceScorePct}% confluence, ${exec.riskRewardRatio} R:R). ${mtf.note || ""}`,
+            ? `Waiting for a cleaner ${isScalp ? "scalp" : "day/swing"} trigger (${q.alignedModulesCount}/5 checks passed). Watch ${entry} for confirmation.`
+            : `${styleTitle} (${setupType}) near ${entry} targeting TP1 ${tp1} and TP2 ${tp2} (${rrStr} R:R, est. hold ${holdTime}).`,
       },
-      educationalInsight:
-        "Institutional consistency comes from enforcing strict mechanical gates: only executing when HTF structure, Discount/Premium OTE, and asymmetric Risk:Reward (>= 1:2.0) align simultaneously.",
+      educationalInsight: isScalp
+        ? "Scalping is about fast, disciplined base hits: take clean 1:1.2 to 1:1.8 moves, respect your tight stop loss, and never let a quick scalp turn into an unplanned hold."
+        : "Consistent day and swing trading comes from waiting for price to reach a clear support/resistance zone, keeping your stop loss safe, and taking steady 1:2+ winners.",
     };
   }
 
-  // Minimal safe neutral WAIT fallback if no quantContext was provided at all
   const base = currentPrice && currentPrice > 0 ? currentPrice : 1.085;
   const dec = base < 5 ? 4 : 2;
-  const step = base * 0.005;
+  const step = base * (isScalp ? 0.0025 : 0.005);
   return {
     engineMode: "DETERMINISTIC_QUANT_ENGINE",
-    modelUsed: "QuantSMC Safety Gate",
-    engineNotice: reasonNote || "Awaiting live candle telemetry before issuing directional bias.",
-    imageQuality: { status: "passed", details: "Chart received; live candle history still initializing." },
+    modelUsed: "Live Price-Action Math Engine",
+    engineNotice: reasonNote || "Waiting for live candles to finish loading.",
+    tradingStyle,
+    styleLabel: styleTitle,
+    estimatedHoldTime: holdTime,
+    imageQuality: { status: "passed", details: "Chart received; candle history still loading." },
     bias: "NEUTRAL",
-    marketStructure: "Insufficient candle telemetry — defaulting to capital-preservation WAIT.",
+    marketStructure: "Waiting for live candle data before giving a trade call.",
     confluenceScore: 2.0,
     confluenceScorePct: 40,
     alignedModulesCount: 1,
-    confluenceFormula: "Awaiting live candle backfill & structural BOS/CHoCH confirmation",
+    confluenceFormula: "Waiting for live candle confirmation",
     antiStopLossShield: {
       structuralInvalidationPrice: Number((base - step).toFixed(dec)),
       bufferPipsApplied: 0,
-      protectionRationale: "Wait for live OHLC feed to compute true 14-period ATR invalidation.",
+      protectionRationale: "Wait a moment for live candles to load accurate stop-loss spacing.",
       dealingRangePosition: "EQUILIBRIUM",
     },
-    killZone: { status: killZoneStatus, windowName: killZoneName, details: `Current window: ${killZoneName}.` },
+    killZone: { status: killZoneStatus, windowName: killZoneName, details: `Current session: ${killZoneName}.` },
     silverBullet: { status: silverBulletStatus, windowName: silverBulletName, details: `Status: ${silverBulletName}.` },
     candleRangeTheory: {
       rangeHigh: Number((base + step).toFixed(dec)),
       rangeLow: Number((base - step).toFixed(dec)),
       sweepType: "NONE",
       deliveryDirection: "NEUTRAL",
-      description: "Awaiting range liquidity sweep.",
+      description: "Waiting for live price range.",
     },
-    judasSwing: { detected: false, direction: "NEUTRAL", triggerLevel: base, description: "No sweep confirmed." },
+    judasSwing: { detected: false, direction: "NEUTRAL", triggerLevel: base, description: "No fakeout detected." },
     powerOf3: {
       detected: false,
       accumulationRange: `${(base - step).toFixed(dec)} – ${(base + step).toFixed(dec)}`,
       manipulationLevel: base,
       distributionTarget: base,
-      description: "Waiting for Accumulation range expansion.",
+      description: "Waiting for range breakout.",
     },
     multiTimeframe: {
       isMultiTimeframe: false,
-      htfBias1D: "NEUTRAL — Syncing Daily feed",
-      intermediateStructure4H: "NEUTRAL — Syncing 4H feed",
-      entryPrecision30M: `Awaiting live ${timeframe} candles`,
-      confirmationMessage: "Allow live feed to finish backfilling candles, then re-run Hybrid Scan.",
+      htfBias1D: "NEUTRAL — Loading Daily candles",
+      intermediateStructure4H: "NEUTRAL — Loading 4H candles",
+      entryPrecision30M: `Loading ${timeframe} candles`,
+      confirmationMessage: "Let the live chart load for a couple seconds, then click Analyze again.",
     },
-    suggestedRisk: "0% — Stand aside until live candle structure confirms.",
-    doActions: ["Allow live feed to load 300 bars before scanning.", "Re-run Hybrid Quant + AI Vision Scan."],
-    dontActions: ["Do not execute blind trades without structural confluence."],
-    detailedVisualDescription: `No active high-probability edge confirmed on ${symbol} (${timeframe}).`,
-    orderBlock: { priceRange: "Pending scan", type: "None", rationale: "Awaiting displacement candle." },
-    supplyDemandZones: { supply: "Pending", demand: "Pending", activeZone: "Equilibrium" },
-    liquidityVoid: { priceRange: "Pending", description: "Awaiting FVG scan." },
+    suggestedRisk: "0% — Stand aside until candles finish loading.",
+    doActions: ["Wait a moment for live candles to load.", "Click Analyze again to get your setup."],
+    dontActions: ["Do not enter blindly without a clear Stop Loss."],
+    detailedVisualDescription: `Waiting for live data on ${symbol} (${timeframe}).`,
+    orderBlock: { priceRange: "Loading...", type: "Key Zone", rationale: "Loading live candles." },
+    supplyDemandZones: { supply: "Loading...", demand: "Loading...", activeZone: "Middle Range" },
+    liquidityVoid: { priceRange: "None", description: "Loading live candles." },
     vacuumBlock: { priceRange: "Pending", description: "N/A" },
-    candlestickPatterns: { patternName: "None", context: "Waiting for closed bar at POI." },
+    candlestickPatterns: { patternName: "Loading...", context: "Waiting for latest candle close." },
     fibonacciRetracement: {
       level_50: base,
       level_618: base,
@@ -371,17 +435,23 @@ function buildDeterministicQuantReport(
       ext_1272: base,
       ext_1618: base,
       ext_2000: base,
-      description: "Awaiting confirmed fractal swings.",
+      description: "Loading swing levels.",
     },
     tradeSetup: {
       type: "WAIT",
+      tradingStyle,
+      holdTime,
       entry: base,
       stopLoss: Number((base - step).toFixed(dec)),
-      takeProfits: [Number((base + step).toFixed(dec)), Number((base + step * 2).toFixed(dec)), Number((base + step * 3).toFixed(dec))],
+      takeProfits: [
+        Number((base + step).toFixed(dec)),
+        Number((base + step * 2).toFixed(dec)),
+        Number((base + step * 3).toFixed(dec)),
+      ],
       riskRewardRatio: "1:0.0",
-      rationale: "Stand aside (WAIT) until live candle structure and AI Vision verify >= 3/5 modules.",
+      rationale: "Wait a moment for live market candles to sync, then re-run Analyze.",
     },
-    educationalInsight: "No trade is also a position. Capital preservation during unclear structure is the #1 institutional edge.",
+    educationalInsight: "Good trading starts with patience — only take trades with a clear entry, stop loss, and target.",
   };
 }
 
@@ -404,7 +474,20 @@ export default async function handler(req: any, res: any) {
     return;
   }
 
-  const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice, quantContext } = req.body || {};
+  const { image, images, symbol, timeframe, tradeHistory, learnings, currentPrice, quantContext, tradingStyle: reqStyle } =
+    req.body || {};
+
+  const tfUpper = String(timeframe || "H1").toUpperCase();
+  const tradingStyle: TradingStyle =
+    reqStyle === "SCALP" || reqStyle === "NORMAL"
+      ? reqStyle
+      : quantContext?.tradingStyle === "SCALP" || quantContext?.tradingStyle === "NORMAL"
+      ? quantContext.tradingStyle
+      : tfUpper === "M1" || tfUpper === "M5"
+      ? "SCALP"
+      : "NORMAL";
+
+  const isScalp = tradingStyle === "SCALP";
 
   try {
     const contentParts: any[] = [];
@@ -432,7 +515,7 @@ export default async function handler(req: any, res: any) {
 
     let reinforcementPrompt = "";
     if (Array.isArray(learnings) && learnings.length > 0) {
-      reinforcementPrompt += `\nUSER SAVED TRADING RULES:\n${learnings
+      reinforcementPrompt += `\nTRADER'S PERSONAL RULES:\n${learnings
         .slice(0, 8)
         .map((l: any, i: number) => `- Rule #${i + 1} (${l.category || "General"} / ${l.symbol || "All"}): ${l.learnings || l}`)
         .join("\n")}\n`;
@@ -442,69 +525,108 @@ export default async function handler(req: any, res: any) {
       const won = tradeHistory.filter((t: any) => t.status === "WON");
       const lost = tradeHistory.filter((t: any) => t.status === "LOST");
       const wr = Math.round((won.length / tradeHistory.length) * 100);
-      reinforcementPrompt += `\nUSER JOURNAL STATS: ${tradeHistory.length} trades, ${wr}% win rate (${won.length}W / ${lost.length}L).\n`;
+      reinforcementPrompt += `\nTRADER'S JOURNAL RECORD: ${tradeHistory.length} trades, ${wr}% win rate (${won.length}W / ${lost.length}L).\n`;
       if (quantContext?.symbolJournalStats?.totalOnSymbol > 0) {
         const s = quantContext.symbolJournalStats;
-        reinforcementPrompt += `SYMBOL-SPECIFIC RECORD ON ${symbol}: ${s.totalOnSymbol} trades, ${s.winRatePct}% win rate (${s.wins}W / ${s.losses}L).\n`;
+        reinforcementPrompt += `RECORD ON ${symbol}: ${s.totalOnSymbol} trades, ${s.winRatePct}% win rate (${s.wins}W / ${s.losses}L).\n`;
       }
     }
 
     const quantBlock = quantContext
-      ? `\nEXACT LIVE MATHEMATICAL SMC TELEMETRY (COMPUTED FROM REAL LIVE OHLC CANDLES — USE THESE EXACT PRICE COORDINATES, DO NOT HALLUCINATE PRICES):\n${JSON.stringify(
+      ? `\nLIVE MARKET PRICE & TECHNICAL DATA (COMPUTED FROM REAL LIVE CANDLES — GROUND ALL PRICE NUMBERS IN THIS DATA):\n${JSON.stringify(
           quantContext,
           null,
           2
         )}\n`
       : "";
 
-    const systemPromptMessage = `You are an elite Institutional Quantitative SMC/ICT Strategist and Computer Vision Chart Analyst covering Forex, Gold/Commodities, Global Indices, Crypto Perpetual Futures (Bybit), and Deriv Synthetic Indices.
+    const styleRules = isScalp
+      ? `ACTIVE MODE: SCALP SETUP (Quick In-and-Out Trade, 5–45 mins hold time)
+- Give a practical, actionable SCALP trade plan anchored close to the current live price (${currentPrice || quantContext?.livePrice || "chart price"}).
+- Use a TIGHT, realistic scalp Stop Loss (~1× ATR, just behind the nearest short-term swing high/low) — NEVER give a giant multi-day swing stop loss!
+- Use fast, achievable Take Profits: TP1 around 1:1.2 R:R (take 50% off & move SL to breakeven), TP2 around 1:1.8 R:R, TP3 around 1:2.5 R:R.
+- Output BUY or SELL whenever momentum, trend, or a pullback zone shows a realistic scalp edge (>= 2/5 checks and >= 1:1.5 R:R). Only output WAIT if the chart is completely flat/choppy or strongly contradicting.`
+      : `ACTIVE MODE: NORMAL TRADE SETUP (Everyday Day Trade / Swing Trade, 2–24 hours hold time)
+- Give a clean, practical NORMAL retail day/swing trade setup based on trend direction, support/resistance, and a clean pullback.
+- Use a comfortable Stop Loss (~1.4×–1.8× ATR, safely beyond the recent swing high/low).
+- Use realistic targets: TP1 around 1:1.5 R:R (take partial & move SL to breakeven), TP2 around 1:2.5 R:R (main target), TP3 around 1:3.5 R:R.
+- Output BUY or SELL when >= 3/5 technical checks align with >= 1:1.8 R:R; otherwise output WAIT and clearly state the exact price to watch for entry.`;
 
-HYBRID QUANT + VISION MANDATE (CRITICAL):
-1. You have been given BOTH the live mathematical SMC engine JSON (computed from real 300-bar OHLC + real 1D/4H MTF + real Order Blocks, FVGs, PDH/PDL, Asian Range, 0.705 OTE, ATR, and Asset-Specific Microstructure) AND chart screenshot(s).
-2. Ground EVERY numerical level (entry, stopLoss, takeProfits, orderBlock, fibonacciRetracement, candleRangeTheory) strictly in the live price (${currentPrice || quantContext?.livePrice || "chart scale"}) and mathematical SMC levels provided. NEVER invent arbitrary prices.
-3. HONEST CAPITAL-PRESERVATION DISCIPLINE: If the mathematical engine shows < 3/5 modules aligned, OR Risk:Reward < 1:2.0, OR price is violating the 50% Premium/Discount rule, OR HTF (1D/4H) strongly contradicts the execution timeframe without a clean liquidity sweep + CHoCH, you MUST set "tradeSetup.type" to "WAIT" and explain exactly what price condition is missing!
-4. ANTI-STOP-LOSS HUNTING RULE: Stop Loss must sit behind the structural displacement origin + ATR volatility buffer (never tight at an obvious retail swing wick).
-5. Current New York Session Time: ${nyTimeStr}. Active Killzone: ${killZoneName}. Active Silver Bullet: ${silverBulletName}.
+    const systemPromptMessage = `You are a practical, plain-spoken Retail Trading Coach & Technical Chart Analyst helping an everyday independent trader trade Forex, Gold, Indices, Crypto, and Deriv Synthetic Indices.
+
+CRITICAL TONE & STYLE RULES (READ CAREFULLY):
+1. The user is an EVERYDAY TRADER — NOT an institutional bank desk! NEVER call the setup an "Institutional Setup", "Institutional Verdict", or flood the report with heavy jargon like "interbank delivery", "PD arrays", "Judas Swing", "Power of 3 AMD", or "Smart Money orderflow".
+2. Write in simple, crystal-clear, practical trading English: talk about Trend, Support & Resistance, Pullback Entry, Stop Loss, Take Profit, Candlestick Signals, Fakeouts, and Risk-to-Reward.
+3. ${styleRules}
+4. ALWAYS populate BOTH "scalpPlan" AND "normalPlan" with exact numbers grounded in the live price (${currentPrice || quantContext?.livePrice || "chart scale"}) and the provided live market data, while "tradeSetup" matches the user's selected mode (${tradingStyle}). NEVER invent random prices far from the live price.
+5. Current New York Time: ${nyTimeStr}. Session: ${killZoneName}.
 ${reinforcementPrompt}
 ${quantBlock}
 
 Respond strictly with a single valid raw JSON object (no markdown fences) matching this exact schema:
 {
+  "tradingStyle": "${tradingStyle}",
+  "styleLabel": "${isScalp ? "Scalp Setup" : "Normal Trade Setup"}",
+  "estimatedHoldTime": "${isScalp ? "5 – 45 mins" : "2 – 24 hours"}",
   "imageQuality": { "status": "passed" | "failed", "details": "string" },
   "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
-  "marketStructure": "string",
-  "confluenceScore": 4.2,
-  "confluenceScorePct": 82,
+  "marketStructure": "plain-English summary of trend and structure",
+  "confluenceScore": 4.0,
+  "confluenceScorePct": 78,
   "alignedModulesCount": 4,
-  "confluenceFormula": "string",
+  "confluenceFormula": "short plain-English summary of why the setup scores this way",
+  "scalpPlan": {
+    "style": "SCALP",
+    "label": "Scalp Setup (Quick In & Out)",
+    "holdTime": "5 – 45 mins",
+    "type": "BUY" | "SELL" | "WAIT",
+    "entry": 0,
+    "stopLoss": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "tp3": 0,
+    "riskRewardRatio": "1:1.8"
+  },
+  "normalPlan": {
+    "style": "NORMAL",
+    "label": "Normal Trade (Day / Swing)",
+    "holdTime": "2 – 24 hours",
+    "type": "BUY" | "SELL" | "WAIT",
+    "entry": 0,
+    "stopLoss": 0,
+    "tp1": 0,
+    "tp2": 0,
+    "tp3": 0,
+    "riskRewardRatio": "1:2.5"
+  },
   "antiStopLossShield": {
     "structuralInvalidationPrice": 0,
     "bufferPipsApplied": 0,
-    "protectionRationale": "string",
+    "protectionRationale": "plain-English explanation of why this Stop Loss is safe from normal wicks",
     "dealingRangePosition": "DISCOUNT_OTE" | "PREMIUM_OTE" | "EQUILIBRIUM"
   },
-  "killZone": { "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE", "windowName": "string", "details": "string" },
+  "killZone": { "status": "ACTIVE_LONDON" | "ACTIVE_NY" | "ACTIVE_NY_PM" | "INACTIVE", "windowName": "string", "details": "plain-English session volatility note" },
   "silverBullet": { "status": "ACTIVE_LONDON" | "ACTIVE_NY_AM" | "ACTIVE_NY_PM" | "INACTIVE", "windowName": "string", "details": "string" },
-  "candleRangeTheory": { "rangeHigh": 0, "rangeLow": 0, "sweepType": "HIGH_SWEPT" | "LOW_SWEPT" | "NONE", "deliveryDirection": "BULLISH" | "BEARISH" | "NEUTRAL", "description": "string" },
-  "judasSwing": { "detected": true, "direction": "BULLISH" | "BEARISH" | "NEUTRAL", "triggerLevel": 0, "description": "string" },
-  "powerOf3": { "detected": true, "accumulationRange": "string", "manipulationLevel": 0, "distributionTarget": 0, "description": "string" },
-  "multiTimeframe": { "isMultiTimeframe": true, "htfBias1D": "string", "intermediateStructure4H": "string", "entryPrecision30M": "string", "confirmationMessage": "string" },
-  "suggestedRisk": "string",
-  "doActions": ["string"],
-  "dontActions": ["string"],
-  "detailedVisualDescription": "string",
-  "orderBlock": { "priceRange": "string", "type": "string", "rationale": "string" },
+  "candleRangeTheory": { "rangeHigh": 0, "rangeLow": 0, "sweepType": "HIGH_SWEPT" | "LOW_SWEPT" | "NONE", "deliveryDirection": "BULLISH" | "BEARISH" | "NEUTRAL", "description": "plain-English range breakout/fakeout summary" },
+  "judasSwing": { "detected": false, "direction": "BULLISH" | "BEARISH" | "NEUTRAL", "triggerLevel": 0, "description": "plain-English note on whether a fakeout wick just happened" },
+  "powerOf3": { "detected": false, "accumulationRange": "string", "manipulationLevel": 0, "distributionTarget": 0, "description": "plain-English summary of today's range and target" },
+  "multiTimeframe": { "isMultiTimeframe": true, "htfBias1D": "plain Daily trend", "intermediateStructure4H": "plain 4H trend", "entryPrecision30M": "plain execution chart entry note", "confirmationMessage": "string" },
+  "suggestedRisk": "simple risk tip e.g. Risk 0.5% to 1%, take partial at TP1 and move SL to breakeven",
+  "doActions": ["clear actionable step 1", "step 2", "step 3"],
+  "dontActions": ["clear mistake to avoid 1", "avoid 2", "avoid 3"],
+  "detailedVisualDescription": "plain-English breakdown of what the chart is doing right now",
+  "orderBlock": { "priceRange": "string", "type": "Key Support Zone or Key Resistance Zone", "rationale": "plain-English explanation" },
   "supplyDemandZones": { "supply": "string", "demand": "string", "activeZone": "string" },
-  "liquidityVoid": { "priceRange": "string", "description": "string" },
+  "liquidityVoid": { "priceRange": "string", "description": "plain-English price gap note" },
   "vacuumBlock": { "priceRange": "string", "description": "string" },
-  "candlestickPatterns": { "patternName": "string", "context": "string" },
+  "candlestickPatterns": { "patternName": "string", "context": "plain-English candle signal" },
   "fibonacciRetracement": { "level_50": 0, "level_618": 0, "level_705": 0, "level_786": 0, "ext_1272": 0, "ext_1618": 0, "ext_2000": 0, "description": "string" },
-  "tradeSetup": { "type": "BUY" | "SELL" | "WAIT", "entry": 0, "stopLoss": 0, "takeProfits": [0, 0, 0], "riskRewardRatio": "1:2.8", "rationale": "string" },
-  "educationalInsight": "string"
+  "tradeSetup": { "type": "BUY" | "SELL" | "WAIT", "tradingStyle": "${tradingStyle}", "holdTime": "${isScalp ? "5 – 45 mins" : "2 – 24 hours"}", "entry": 0, "stopLoss": 0, "takeProfits": [0, 0, 0], "riskRewardRatio": "1:2.0", "rationale": "plain-English trade plan" },
+  "educationalInsight": "short practical trader tip"
 }`;
 
     const textPart = {
-      text: `Perform a Hybrid Quantitative + Vision SMC evaluation for ${symbol || "Market Asset"} (${timeframe || "H1"}) at live price ${currentPrice || quantContext?.livePrice || "visible on chart"}. Cross-check the visual candle structure in the chart image(s) against the exact mathematical SMC telemetry JSON. Only output BUY or SELL if >= 3 of 5 modules align and R:R >= 1:2.0; otherwise output WAIT.`,
+      text: `Analyze ${symbol || "Market Asset"} on the ${timeframe || "H1"} timeframe at live price ${currentPrice || quantContext?.livePrice || "visible on chart"} and give a practical ${isScalp ? "SCALP SETUP (quick trade, tight SL, fast TPs)" : "NORMAL TRADE SETUP (day/swing trade, clean S/R pullback, realistic TPs)"} for an everyday retail trader. Also populate both scalpPlan and normalPlan using the live market data. Keep all language simple, clear, and actionable.`,
     };
 
     const { response, modelUsed } = await generateGeminiContent(ai, "gemini-4-hydrogen", {
@@ -532,19 +654,23 @@ Respond strictly with a single valid raw JSON object (no markdown fences) matchi
 
     parsedResult.engineMode = "HYBRID_AI_VISION";
     parsedResult.modelUsed = modelUsed;
+    parsedResult.tradingStyle = tradingStyle;
+    parsedResult.styleLabel = parsedResult.styleLabel || (isScalp ? "Scalp Setup" : "Normal Trade Setup");
+    parsedResult.estimatedHoldTime = parsedResult.estimatedHoldTime || (isScalp ? "5 – 45 mins" : "2 – 24 hours");
 
     res.status(200).json({
       success: true,
       data: parsedResult,
     });
   } catch (error: any) {
-    console.warn("[analyze-chart] Falling back to deterministic mathematical quant report:", error?.message);
+    console.warn("[analyze-chart] Falling back to live price-action calculation:", error?.message);
     const fallbackData = buildDeterministicQuantReport(
       symbol || "Market Asset",
       timeframe || "H1",
+      tradingStyle,
       currentPrice,
       quantContext,
-      `Gemini Vision unavailable (${error?.message || "timeout"}); report synthesized deterministically from live OHLC SMC mathematics.`
+      `Live AI Vision temporarily unavailable (${error?.message || "timeout"}); generated directly from live market candles.`
     );
     res.status(200).json({
       success: true,

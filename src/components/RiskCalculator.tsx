@@ -68,7 +68,7 @@ export default function RiskCalculator({
           </h2>
         </div>
         <div className="text-xs text-slate-600 font-mono">
-          1%–2% Institutional Risk Protocol · Multi-Asset Lot Engine
+          0.5%–2% Smart Risk Sizing · Scalp &amp; Normal Trade Lot Calculator
         </div>
       </div>
 

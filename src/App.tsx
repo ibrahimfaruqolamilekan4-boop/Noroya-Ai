@@ -59,6 +59,7 @@ import {
   evaluateMultiFactorConfluence,
   buildQuantContextPayload,
   QuantitativeEvaluation,
+  TradingStyle,
 } from "./lib/quantEngine";
 import { StandardCandle } from "./services/MarketDataService";
 
@@ -271,6 +272,16 @@ function QuantWorkstation({
   >("ALL");
   const [customSymbolText, setCustomSymbolText] = useState("");
   const [symbolSearchQuery, setSymbolSearchQuery] = useState("");
+  const [tradingStyle, setTradingStyle] = useState<TradingStyle>("NORMAL");
+
+  const handleTradingStyleChange = (nextStyle: TradingStyle) => {
+    setTradingStyle(nextStyle);
+    if (nextStyle === "SCALP" && (timeframe === "H1" || timeframe === "H4")) {
+      setTimeframe("M5");
+    } else if (nextStyle === "NORMAL" && timeframe === "M1") {
+      setTimeframe("H1");
+    }
+  };
 
   // Shared live stream + real MTF (1D/4H) + paired SMT reference from MarketDataProvider
   const { candles, latestCandle, futuresTelemetry, telemetry, mtfCandles, smtReference } =
@@ -653,7 +664,7 @@ function QuantWorkstation({
     // Exact live price from our shared Bybit / Deriv WebSocket stream (never defaults to R_75!)
     const liveSpotPrice = latestCandle?.close || (candles.length > 0 ? candles[candles.length - 1].close : symbol.defaultPrice);
 
-    // Compute exact real-time mathematical SMC telemetry to ground Hybrid AI Vision
+    // Compute exact real-time technical data tailored to Scalp or Normal trade style
     const freshQuantEval = evaluateMultiFactorConfluence(
       symbol,
       timeframe,
@@ -662,7 +673,8 @@ function QuantWorkstation({
       candles,
       futuresTelemetry,
       mtfCandles,
-      smtReference
+      smtReference,
+      tradingStyle
     );
     const quantContext = buildQuantContextPayload(
       freshQuantEval,
@@ -697,6 +709,7 @@ function QuantWorkstation({
             images: compressedImages,
             symbol: customSymbolText ? customSymbolText : symbol.name,
             timeframe,
+            tradingStyle,
             tradeHistory: trades,
             learnings: learningsData,
             currentPrice: liveSpotPrice,
@@ -706,6 +719,7 @@ function QuantWorkstation({
             image: compressedTargetImage,
             symbol: customSymbolText ? customSymbolText : symbol.name,
             timeframe,
+            tradingStyle,
             tradeHistory: trades,
             learnings: learningsData,
             currentPrice: liveSpotPrice,
@@ -747,20 +761,34 @@ function QuantWorkstation({
       const primaryOb = freshQuantEval.overlays.orderBlocks[freshQuantEval.overlays.orderBlocks.length - 1];
       const primaryFvg = freshQuantEval.overlays.fairValueGaps[freshQuantEval.overlays.fairValueGaps.length - 1];
 
+      const isScalp = tradingStyle === "SCALP";
+      const sp = freshQuantEval.tradePlans.scalp;
+      const np = freshQuantEval.tradePlans.normal;
       const localResult = {
         engineMode: "DETERMINISTIC_QUANT_ENGINE",
-        modelUsed: "Local Mathematical SMC Engine",
-        engineNotice: "Network / API unavailable — synthesized deterministically from live OHLC candles.",
+        modelUsed: "Live Price-Action Math Engine",
+        engineNotice: "Live AI temporarily busy — setup calculated directly from live market candles.",
+        tradingStyle,
+        styleLabel: isScalp ? "Scalp Setup" : "Normal Trade Setup",
+        estimatedHoldTime: ec.holdTime,
         imageQuality: {
           status: "passed",
-          details: `Analyzed ${candles.length} live ${symbol.ticker} (${timeframe}) OHLC bars.`,
+          details: `Analyzed ${candles.length} live ${symbol.ticker} (${timeframe}) candles.`,
         },
         bias: isBull ? "BULLISH" : isBear ? "BEARISH" : "NEUTRAL",
-        marketStructure: `${st.ltfStructure} · HTF: ${st.htfStructure}`,
+        marketStructure: `${st.ltfStructure} · Higher TF: ${st.htfStructure}`,
         confluenceScore: Number((freshQuantEval.confluenceScorePct / 20).toFixed(1)),
         confluenceScorePct: freshQuantEval.confluenceScorePct,
         alignedModulesCount: freshQuantEval.alignedModulesCount,
         confluenceFormula: freshQuantEval.confluenceFormulaBanner,
+        scalpPlan: {
+          ...sp,
+          type: sp.orderType.includes("BUY") ? "BUY" : sp.orderType.includes("SELL") ? "SELL" : "WAIT",
+        },
+        normalPlan: {
+          ...np,
+          type: np.orderType.includes("BUY") ? "BUY" : np.orderType.includes("SELL") ? "SELL" : "WAIT",
+        },
         antiStopLossShield: {
           structuralInvalidationPrice: ec.invalidationSL,
           bufferPipsApplied: Number(Math.abs(ec.optimalEntry705 - ec.invalidationSL).toFixed(liveSpotPrice < 5 ? 4 : 2)),
@@ -775,12 +803,12 @@ function QuantWorkstation({
         killZone: {
           status: st.killzoneActive ? "ACTIVE_NY" : "INACTIVE",
           windowName: st.killzoneWindow,
-          details: st.killzoneActive ? "Institutional session active." : "Outside peak London/NY killzone.",
+          details: st.killzoneActive ? "Active trading session with good movement." : "Quieter market hours — keep targets realistic.",
         },
         silverBullet: {
           status: "INACTIVE",
-          windowName: "Silver Bullet Window Monitor",
-          details: "Monitor 03:00–04:00 EST / 10:00–11:00 EST for FVG sweeps.",
+          windowName: "Peak Session Watch",
+          details: "Best volume usually hits during London & New York market opens.",
         },
         candleRangeTheory: {
           rangeHigh: fib.swingHigh,
@@ -803,7 +831,7 @@ function QuantWorkstation({
               : `${formatPrice(fib.swingLow, symbol)} – ${formatPrice(fib.equilibrium50, symbol)}`,
           manipulationLevel: isBull ? st.asianLow || st.sslPool : st.asianHigh || st.bslPool,
           distributionTarget: ec.tp2_1618,
-          description: "Accumulation-Manipulation-Distribution range mapped from live OHLC bars.",
+          description: "Session high/low range mapped for breakout and pullback targets.",
         },
         multiTimeframe: {
           isMultiTimeframe: true,
@@ -813,43 +841,51 @@ function QuantWorkstation({
           confirmationMessage: freshQuantEval.mtfAlignment.alignmentNote,
         },
         suggestedRisk: freshQuantEval.highProbabilityTrigger
-          ? "0.5% to 1.0% account risk. Bank 40% at TP1 and move SL to breakeven."
-          : "0% — WAIT. Confluence or asymmetric R:R gate not yet satisfied.",
+          ? isScalp
+            ? "0.5% to 1.0% risk per scalp. Take 50% at TP1 and move Stop Loss to breakeven."
+            : "1.0% max risk per trade. Secure partial profit at TP1 and move Stop Loss to breakeven."
+          : "0% — Wait for a cleaner setup before entering.",
         doActions: freshQuantEval.highProbabilityTrigger
           ? [
-              `Stage ${ec.orderType} at ${formatPrice(ec.optimalEntry705, symbol)} inside ${st.pdArrayType}.`,
-              `Bank 40% at TP1 (${formatPrice(ec.tp1_1272, symbol)}) and move SL to breakeven.`,
+              `Enter ${ec.orderType} near ${formatPrice(ec.optimalEntry705, symbol)} with SL at ${formatPrice(ec.invalidationSL, symbol)}.`,
+              `Take partial profits at TP1 (${formatPrice(ec.tp1_1272, symbol)}) and move SL to breakeven.`,
+              `Target TP2 (${formatPrice(ec.tp2_1618, symbol)}) — est. hold ${ec.holdTime}.`,
             ]
           : [
-              `Stand aside until >= 3/5 modules align and true R:R >= 1:2.0.`,
-              `Monitor ${isBull ? "Discount" : "Premium"} retracement toward ${formatPrice(fib.ote705SweetSpot, symbol)}.`,
+              `Wait for price to pull back closer to ${formatPrice(ec.optimalEntry705, symbol)}.`,
+              `Look for a clean candle confirmation before entering.`,
             ],
-        dontActions: [
-          "Do not chase mid-range price action in Equilibrium.",
-          "Do not move Stop Loss inside the structural sweep zone.",
-        ],
-        detailedVisualDescription: `Deterministic mathematical scan for ${symbol.name} (${timeframe}) at ${formatPrice(liveSpotPrice, symbol)}.`,
+        dontActions: isScalp
+          ? [
+              "Do not widen your Stop Loss on a scalp.",
+              "Do not overhold a quick scalp if momentum stalls.",
+            ]
+          : [
+              "Do not chase price after a large spike candle.",
+              "Do not risk more than 1%–2% of your account on one trade.",
+            ],
+        detailedVisualDescription: `${isScalp ? "Scalp" : "Normal Trade"} scan for ${symbol.name} (${timeframe}) at ${formatPrice(liveSpotPrice, symbol)}.`,
         orderBlock: {
           priceRange: primaryOb
             ? `${formatPrice(primaryOb.bottom, symbol)} – ${formatPrice(primaryOb.top, symbol)}`
             : st.pdArrayZone,
-          type: primaryOb ? `${primaryOb.type.replace(/_/g, " ")} (${primaryOb.status})` : st.pdArrayType,
+          type: primaryOb ? (primaryOb.type.includes("BULL") ? "Key Support / Buy Zone" : "Key Resistance / Sell Zone") : "Key Entry Zone",
           rationale: primaryOb
-            ? `Confirmed ${primaryOb.displacementAtrMultiple}× ATR displacement origin.`
-            : "Anchored to active dealing range OTE zone.",
+            ? `Strong reaction zone (${primaryOb.displacementAtrMultiple}× ATR move).`
+            : "Anchored to nearest pullback support/resistance zone.",
         },
         supplyDemandZones: {
           supply: `${formatPrice(fib.equilibrium50, symbol)} – ${formatPrice(fib.swingHigh, symbol)}`,
           demand: `${formatPrice(fib.swingLow, symbol)} – ${formatPrice(fib.equilibrium50, symbol)}`,
-          activeZone: `${fib.currentZone} Zone`,
+          activeZone: `${fib.currentZone === "DISCOUNT" ? "Buy Value Zone" : fib.currentZone === "PREMIUM" ? "Sell Value Zone" : "Middle Range"}`,
         },
         liquidityVoid: {
           priceRange: primaryFvg
             ? `${formatPrice(primaryFvg.bottom, symbol)} – ${formatPrice(primaryFvg.top, symbol)}`
-            : "None detected above 0.15× ATR",
+            : "No wide price gap open",
           description: primaryFvg
-            ? `${primaryFvg.type} FVG (${primaryFvg.status}) with 50% CE at ${formatPrice(primaryFvg.midpointCE, symbol)}.`
-            : "Price delivery currently balanced.",
+            ? `Open ${primaryFvg.type.toLowerCase()} price gap with midpoint at ${formatPrice(primaryFvg.midpointCE, symbol)}.`
+            : "Price action is balanced with no major unfilled gap nearby.",
         },
         candlestickPatterns: {
           patternName: freshQuantEval.candlestickTrigger.patternName,
@@ -866,15 +902,18 @@ function QuantWorkstation({
           description: fib.filterExplanation,
         },
         tradeSetup: {
-          type: ec.orderType === "BUY LIMIT" ? "BUY" : ec.orderType === "SELL LIMIT" ? "SELL" : "WAIT",
+          type: ec.orderType.includes("BUY") ? "BUY" : ec.orderType.includes("SELL") ? "SELL" : "WAIT",
+          tradingStyle,
+          holdTime: ec.holdTime,
           entry: ec.optimalEntry705,
           stopLoss: ec.invalidationSL,
           takeProfits: [ec.tp1_1272, ec.tp2_1618, ec.tp3_2000],
           riskRewardRatio: ec.riskRewardRatio,
           rationale: `${freshQuantEval.confluenceFormulaBanner}. ${freshQuantEval.mtfAlignment.alignmentNote}`,
         },
-        educationalInsight:
-          "Capital preservation requires standing aside whenever confluence drops below 3/5 modules or Risk:Reward falls under 1:2.0.",
+        educationalInsight: isScalp
+          ? "For scalping, lock in quick 1:1.2 to 1:1.8 gains, respect your tight Stop Loss, and move on to the next clean setup."
+          : "For day and swing trading, patience pays: let price come to your support/resistance zone and protect every trade with a clear Stop Loss.",
       };
 
       setAnalysisResult(localResult);
@@ -1003,11 +1042,11 @@ function QuantWorkstation({
                     Quant<span className="text-emerald-600">SMC</span>
                   </span>
                   <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold">
-                    v4.2 Institutional
+                    Scalp &amp; Trade Pro
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600 hidden sm:block">
-                  Multi-Asset Quantitative Workstation · Forex · Synthetics · Perps
+                  Scalp &amp; Normal Trade Analyzer · Forex · Synthetics · Crypto
                 </p>
               </div>
             </button>
@@ -1341,10 +1380,55 @@ function QuantWorkstation({
                   />
                 </div>
 
+                {/* Trading Style Selector: Scalp vs Normal Trade */}
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Trading Setup Style
+                  </label>
+                  <div className="grid grid-cols-2 gap-1.5 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
+                    <button
+                      type="button"
+                      onClick={() => handleTradingStyleChange("SCALP")}
+                      className={`py-2 px-2.5 rounded-md text-left transition-all cursor-pointer ${
+                        tradingStyle === "SCALP"
+                          ? "bg-emerald-600 text-white shadow-2xs"
+                          : "text-slate-700 hover:text-slate-900"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold leading-tight">Scalp Setup</span>
+                      <span
+                        className={`block text-[10px] mt-0.5 ${
+                          tradingStyle === "SCALP" ? "text-emerald-100" : "text-slate-500"
+                        }`}
+                      >
+                        Quick 5–45m · Tight SL
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTradingStyleChange("NORMAL")}
+                      className={`py-2 px-2.5 rounded-md text-left transition-all cursor-pointer ${
+                        tradingStyle === "NORMAL"
+                          ? "bg-emerald-600 text-white shadow-2xs"
+                          : "text-slate-700 hover:text-slate-900"
+                      }`}
+                    >
+                      <span className="block text-xs font-bold leading-tight">Normal Trade</span>
+                      <span
+                        className={`block text-[10px] mt-0.5 ${
+                          tradingStyle === "NORMAL" ? "text-emerald-100" : "text-slate-500"
+                        }`}
+                      >
+                        Day / Swing · Bigger TP
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
                 {/* Primary Timeframe */}
                 <div>
                   <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Execution Timeframe
+                    Chart Timeframe
                   </label>
                   <div className="grid grid-cols-6 gap-1 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
                     {["M1", "M5", "M15", "M30", "H1", "H4"].map((tf) => (
@@ -1561,19 +1645,25 @@ function QuantWorkstation({
                   {isAnalyzing ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Scanning Chart Matrix &amp; Order Blocks...</span>
+                      <span>
+                        Building {tradingStyle === "SCALP" ? "Scalp" : "Normal Trade"} Setup...
+                      </span>
                     </>
                   ) : (
                     <>
                       <Play className="h-4 w-4 fill-current" />
-                      <span>{imagePreview ? "Run AI Vision SMC Analysis" : `Analyze ${symbol.ticker} (Instant 1-Click Scan)`}</span>
+                      <span>
+                        {imagePreview
+                          ? `Analyze Chart (${tradingStyle === "SCALP" ? "Scalp" : "Normal"} Setup)`
+                          : `Get ${symbol.ticker} ${tradingStyle === "SCALP" ? "Scalp" : "Normal"} Setup`}
+                      </span>
                     </>
                   )}
                 </button>
                 <p className="text-[11px] text-center text-slate-500 font-medium">
                   {imagePreview
-                    ? "Custom chart screenshot loaded and ready for deep institutional scan"
-                    : "Zero setup required — instant auto-scan of live market candles"}
+                    ? `Screenshot loaded — ready for ${tradingStyle === "SCALP" ? "quick scalp" : "normal day/swing"} analysis`
+                    : `Instant 1-click ${tradingStyle === "SCALP" ? "scalp" : "normal trading"} analysis on live candles`}
                 </p>
               </div>
             </div>
@@ -1666,6 +1756,8 @@ function QuantWorkstation({
                   <QuantAnalyzerPanel
                     symbol={symbol}
                     timeframe={timeframe}
+                    tradingStyle={tradingStyle}
+                    onTradingStyleChange={handleTradingStyleChange}
                     aiAnalysisResult={analysisResult}
                     onEvaluationChange={(ev) => setLiveQuantEvaluation(ev)}
                     onSyncLevelsToWorkspace={(levels) => {
@@ -1739,7 +1831,7 @@ function QuantWorkstation({
                         <Loader2 className="h-6 w-6 animate-spin" />
                       </div>
                       <h3 className="text-base font-bold font-display text-slate-900">
-                        Running Hybrid Quantitative + Vision AI Scan
+                        Building Your {tradingStyle === "SCALP" ? "Scalp" : "Normal Trade"} Setup
                       </h3>
                       <p className="text-xs font-mono text-emerald-800 bg-emerald-50 border border-emerald-300 inline-block px-3 py-1.5 rounded-md">
                         {analysisProgress}
@@ -1752,17 +1844,17 @@ function QuantWorkstation({
                       </div>
                       <div className="max-w-md mx-auto space-y-2">
                         <h3 className="text-base font-bold font-display text-slate-900">
-                          Ready for Hybrid Quant + Vision Scan
+                          Ready for {tradingStyle === "SCALP" ? "Scalp Setup" : "Normal Trade"} Analysis
                         </h3>
                         <p className="text-xs text-slate-600 leading-relaxed">
-                          Click <strong>Analyze {symbol.ticker}</strong> on the left panel to synthesize live 300-bar OHLC mathematics (1D/4H MTF, Order Blocks, FVGs, SMT, OI/CVD) with Gemini 4 Vision.
+                          Pick <strong>Scalp Setup</strong> (fast 5–45 min trades) or <strong>Normal Trade</strong> (day/swing setups) and click below to get your Entry, Stop Loss, and Take Profit plan.
                         </p>
                         <button
                           type="button"
                           onClick={() => startSMCAnalysis()}
                           className="mt-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold cursor-pointer"
                         >
-                          Run Instant Hybrid Scan on {symbol.ticker}
+                          Analyze {symbol.ticker} ({tradingStyle === "SCALP" ? "Scalp" : "Normal"} Setup)
                         </button>
                       </div>
                     </div>
@@ -1772,6 +1864,7 @@ function QuantWorkstation({
                         analysis={analysisResult}
                         symbol={symbol}
                         timeframe={timeframe}
+                        tradingStyle={tradingStyle}
                         onSyncLevels={(levels) => {
                           setActiveLevels(levels);
                           setActiveTab("calculator");
@@ -1799,7 +1892,7 @@ function QuantWorkstation({
                       <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-5 space-y-4">
                         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300 pb-3">
                           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 font-display">
-                            Log Setup to Institutional Trade Journal
+                            Save Setup to Your Trade Journal
                           </h4>
                           <div className="flex items-center gap-2">
                             <button
@@ -1921,7 +2014,7 @@ function QuantWorkstation({
             {/* Filter Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-[#F1F4F8] border border-slate-300 rounded-xl p-4">
               <h2 className="text-sm font-bold font-display text-slate-900">
-                Institutional Execution Ledger
+                Trade Execution Ledger
               </h2>
               <div className="flex flex-wrap gap-1 bg-[#DFE4EB] p-1 rounded-lg border border-slate-300">
                 {(["ALL", "PENDING", "WON", "LOST", "BREAKEAVEN"] as const).map(
