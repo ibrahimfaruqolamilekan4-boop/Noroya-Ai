@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { auth, googleProvider } from "../lib/firebase";
-import { signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { useFirebase } from "../contexts/FirebaseContext";
+import { firebaseDatabaseId, firebaseProjectId } from "../lib/firebase";
 import {
   Database,
   Info,
@@ -10,12 +10,25 @@ import {
   UserCheck,
   RefreshCw,
   Zap,
+  CloudUpload,
+  CheckCircle2,
 } from "lucide-react";
 
 export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () => void }) {
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [authError, setAuthError] = useState("");
+  const {
+    user: firebaseUser,
+    isAuthReady,
+    isCloudConnected,
+    authLoading,
+    authError,
+    localTradesCount,
+    migrating,
+    migrationMessage,
+    signInWithGoogle,
+    signOutGoogle,
+    syncLocalToCloud,
+  } = useFirebase();
+
   const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
 
@@ -76,40 +89,19 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
     }
   };
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setFirebaseUser(user);
-      setAuthLoading(false);
-    });
-    return () => unsubscribe();
-  }, []);
-
   const handleGoogleLogin = async () => {
-    setAuthLoading(true);
-    setAuthError("");
-    try {
-      await signInWithPopup(auth, googleProvider);
-      onConfigChange();
-    } catch (err: any) {
-      console.error("Firebase Google active sign-in crash:", err);
-      setAuthError(
-        err.message || "Failed to establish popup connection. Verify browser permissions."
-      );
-    } finally {
-      setAuthLoading(false);
-    }
+    await signInWithGoogle();
+    onConfigChange();
   };
 
   const handleGoogleLogout = async () => {
-    setAuthLoading(true);
-    try {
-      await signOut(auth);
-      onConfigChange();
-    } catch (err: any) {
-      console.error("Firebase sign-out failed:", err);
-    } finally {
-      setAuthLoading(false);
-    }
+    await signOutGoogle();
+    onConfigChange();
+  };
+
+  const handleSyncLocal = async () => {
+    await syncLocalToCloud();
+    onConfigChange();
   };
 
   return (
@@ -130,12 +122,21 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
               </h2>
             </div>
           </div>
+
+          <div className="flex items-center gap-2 text-[11px] font-mono text-slate-600 bg-[#E8ECF2] px-3 py-1.5 rounded-lg border border-slate-300">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                isCloudConnected ? "bg-emerald-600" : "bg-rose-500"
+              }`}
+            />
+            <span>{isCloudConnected ? "Firestore Online" : "Firestore Offline"}</span>
+          </div>
         </div>
 
-        {authLoading ? (
+        {!isAuthReady || authLoading ? (
           <div className="flex items-center gap-2 text-slate-600 text-xs py-4">
             <div className="h-4 w-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
-            Authenticating cloud access credentials...
+            Connecting to Firebase Authentication &amp; Firestore...
           </div>
         ) : firebaseUser ? (
           <div className="bg-[#E8ECF2] border border-slate-300 rounded-xl p-5 space-y-4">
@@ -147,14 +148,14 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
                 <div>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     <span className="font-bold text-slate-900">
-                      {firebaseUser.displayName || "Active SMC Trader"}
+                      {firebaseUser.displayName || "Active Trader"}
                     </span>
                     <span>·</span>
                     <span className="text-emerald-700 font-semibold">Cloud Linked</span>
                     {firebaseUser.email === "ibrahimfaruqolamilekan4@gmail.com" && (
                       <>
                         <span>·</span>
-                        <span className="text-emerald-800 font-semibold">System Admin</span>
+                        <span className="text-emerald-800 font-semibold">Admin</span>
                       </>
                     )}
                   </div>
@@ -167,27 +168,76 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
                 className="w-full sm:w-auto px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 hover:text-slate-900 transition rounded-lg text-xs flex items-center justify-center gap-2 cursor-pointer font-semibold"
               >
                 <LogOut className="h-3.5 w-3.5 text-slate-600" />
-                Disconnect Vault
+                Disconnect Cloud
               </button>
             </div>
 
             <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-lg leading-relaxed flex items-center gap-2.5">
               <UserCheck className="h-4 w-4 text-emerald-600 shrink-0" />
               <span>
-                <strong>Cloud synchronization active:</strong> All trade results, chart snapshots, and analysis logs are synchronized to Firebase Firestore in real time.
+                <strong>Real-time Firestore sync active:</strong> Your Trade Journal, AI Scalp/Normal Scan History, Coach Chat, Personal Trading Rules, and Setup Preferences are synced securely to Firebase Firestore.
               </span>
             </div>
 
+            {/* Active Synced Collections Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+              {[
+                { name: "trades", desc: "Real-time trade journal & P&L ledger" },
+                { name: "analysis_reports", desc: "Saved Scalp & Normal AI chart scans" },
+                { name: "user_preferences", desc: "Synced Scalp/Normal style & default symbol" },
+                { name: "user_learnings", desc: "Personal rules fed into the AI analyzer" },
+                { name: "chat_history", desc: "AI Trading Coach conversation history" },
+              ].map((col) => (
+                <div
+                  key={col.name}
+                  className="bg-[#F1F4F8] border border-slate-300 rounded-lg p-3 flex items-start gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-mono font-bold text-slate-900">/{col.name}</div>
+                    <div className="text-[11px] text-slate-600 mt-0.5">{col.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Local-to-Cloud Migration Card */}
+            {localTradesCount > 0 && (
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-amber-900">
+                  <strong>
+                    {localTradesCount} local trade{localTradesCount === 1 ? "" : "s"} found in this browser.
+                  </strong>{" "}
+                  Upload them to Firestore so they appear across all your devices.
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncLocal}
+                  disabled={migrating}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-semibold rounded-lg flex items-center gap-1.5 cursor-pointer shrink-0"
+                >
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  <span>{migrating ? "Uploading..." : "Sync Local Trades to Cloud"}</span>
+                </button>
+              </div>
+            )}
+
+            {migrationMessage && (
+              <div className="p-3 bg-white border border-slate-300 rounded-lg text-xs text-slate-700 font-medium">
+                {migrationMessage}
+              </div>
+            )}
+
             {firebaseUser.email === "ibrahimfaruqolamilekan4@gmail.com" && (
-              <div className="p-5 border border-emerald-200 bg-white rounded-xl space-y-4">
+              <div className="p-4 border border-emerald-200 bg-white rounded-xl space-y-2">
                 <div className="flex items-center gap-2 text-emerald-700">
-                  <ShieldCheck className="h-5 w-5" />
+                  <ShieldCheck className="h-4 w-4" />
                   <h3 className="text-xs font-bold tracking-wider uppercase font-display">
-                    Administrator System Console
+                    Administrator Firestore Config
                   </h3>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Authenticated as system administrator (<strong>ibrahimfaruqolamilekan4@gmail.com</strong>). Global Firestore security rules and server-side Vercel environment credentials are active.
+                <p className="text-xs text-slate-600 leading-relaxed font-mono">
+                  Project: {firebaseProjectId} · Database: {firebaseDatabaseId}
                 </p>
               </div>
             )}
@@ -195,7 +245,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
         ) : (
           <div className="space-y-4">
             <p className="text-xs text-slate-600 leading-relaxed max-w-xl">
-              Connect your Google account to synchronize your trade journal and custom SMC rules across devices. When not signed in, trade logs automatically persist in local browser storage.
+              Connect your Google account to sync your Trade Journal, AI Scalp/Normal Scan History, Personal Trading Rules, and Preferences to Firebase Firestore across devices. Without signing in, everything still works locally in your browser.
             </p>
 
             <button
@@ -203,7 +253,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg transition cursor-pointer flex items-center gap-2 font-semibold shadow-xs"
             >
               <LogIn className="h-4 w-4" />
-              Sign in with Google Account
+              Sign in with Google to Sync Firestore
             </button>
 
             {authError && (
@@ -215,7 +265,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
             <div className="p-4 rounded-lg border border-slate-300 bg-[#E8ECF2] flex gap-2.5">
               <Info className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
               <p className="text-xs text-slate-700 leading-normal">
-                Zero-Login Operation: You can use the full quantitative analyzer, risk calculator, and local trade journal without signing in.
+                Zero-Login Operation: You can use the full Scalp &amp; Normal trade analyzer, risk calculator, and local trade journal immediately without signing in.
               </p>
             </div>
           </div>
@@ -239,7 +289,7 @@ export default function DatabaseSetup({ onConfigChange }: { onConfigChange: () =
         </div>
 
         <p className="text-xs text-slate-600 mb-4 leading-relaxed">
-          AI chart vision and quantitative analysis run automatically via your server-side Vercel environment variables. Use the controls below to verify server connectivity or refresh cached PWA assets.
+          AI chart vision and live market analysis run automatically via your server environment variables. Use the controls below to verify server connectivity or refresh cached PWA assets.
         </p>
 
         <div className="space-y-3">

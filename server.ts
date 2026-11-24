@@ -5,6 +5,7 @@ import { syncProjectToGitHub } from "./scripts/github-sync";
 import analyzeChartHandler from "./api/analyze-chart";
 import chatBotHandler from "./api/chat-bot";
 import generateEducationalImageHandler from "./api/generate-educational-image";
+import debriefTradeHandler from "./api/debrief-trade";
 
 dotenv.config();
 
@@ -58,6 +59,10 @@ app.post(["/api/chat-bot", "/chat-bot"], async (req, res) => {
 
 app.post(["/api/generate-educational-image", "/generate-educational-image"], async (req, res) => {
   await generateEducationalImageHandler(req, res);
+});
+
+app.post(["/api/debrief-trade", "/debrief-trade"], async (req, res) => {
+  await debriefTradeHandler(req, res);
 });
 
 // GitHub Auto-Sync API Endpoint

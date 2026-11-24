@@ -935,70 +935,143 @@ export default function LiveTradingViewChart({
         </div>
       )}
 
-      {/* MANUAL EXECUTION SLIDERS */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 p-4 rounded-xl bg-[#E8ECF2] border border-slate-300 font-mono text-xs tabular-nums">
-        <div className="space-y-1">
-          <div className="flex justify-between font-semibold text-slate-700">
-            <span>Entry Level</span>
-            <span className="text-emerald-700 font-bold">{formatPrice(tempEntry, symbol)}</span>
+      {/* INTERACTIVE QUICK LEVEL ADJUSTER + LIVE R:R */}
+      <div className="p-4 rounded-xl bg-[#E8ECF2] border border-slate-300 space-y-3 font-mono text-xs tabular-nums">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-300/90 pb-2.5">
+          <div className="flex items-center gap-2 font-sans font-bold text-slate-900 text-xs">
+            <Sliders className="h-3.5 w-3.5 text-emerald-600" />
+            <span>Interactive Chart Levels (Fine-Tune Entry, SL &amp; TPs)</span>
           </div>
-          <input
-            type="range"
-            min={tempEntry * 0.9 || 1}
-            max={tempEntry * 1.1 || 1000}
-            step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
-            value={tempEntry}
-            onChange={(e) => setTempEntry(parseFloat(e.target.value))}
-            className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
-          />
+          <div className="flex items-center gap-2.5">
+            {(() => {
+              const risk = Math.abs(tempEntry - tempSL);
+              const rr1 = risk > 0 ? Math.abs(tempTP1 - tempEntry) / risk : 0;
+              const rr2 = risk > 0 ? Math.abs(tempTP2 - tempEntry) / risk : 0;
+              return (
+                <span className="px-2.5 py-1 rounded bg-[#F1F4F8] border border-slate-300 text-[11px] font-bold text-slate-800">
+                  TP1 1:{rr1.toFixed(1)} · TP2 1:{rr2.toFixed(1)}
+                </span>
+              );
+            })()}
+            {onSyncLevels && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSyncLevels({
+                    entry: tempEntry,
+                    stopLoss: tempSL,
+                    tp1: tempTP1,
+                    tp2: tempTP2,
+                  })
+                }
+                className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-sans font-semibold text-[11px] transition cursor-pointer"
+              >
+                Apply to Risk Sizer
+              </button>
+            )}
+          </div>
         </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between font-semibold text-slate-700">
-            <span>Invalidation SL</span>
-            <span className="text-rose-700 font-bold">{formatPrice(tempSL, symbol)}</span>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center font-semibold text-slate-700">
+              <span>Entry</span>
+              <input
+                type="number"
+                step="any"
+                value={Number.isFinite(tempEntry) ? Number(tempEntry.toFixed(tempEntry < 5 ? 5 : 2)) : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v >= 0) setTempEntry(v);
+                }}
+                className="w-24 text-right px-1.5 py-0.5 rounded bg-white border border-slate-300 text-emerald-700 font-bold text-xs focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+            <input
+              type="range"
+              min={tempEntry * 0.9 || 1}
+              max={tempEntry * 1.1 || 1000}
+              step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
+              value={tempEntry}
+              onChange={(e) => setTempEntry(parseFloat(e.target.value))}
+              className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+            />
           </div>
-          <input
-            type="range"
-            min={tempEntry * 0.85 || 1}
-            max={tempEntry * 1.15 || 1000}
-            step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
-            value={tempSL}
-            onChange={(e) => setTempSL(parseFloat(e.target.value))}
-            className="w-full accent-rose-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between font-semibold text-slate-700">
-            <span>TP1 (1.272)</span>
-            <span className="text-emerald-700 font-bold">{formatPrice(tempTP1, symbol)}</span>
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center font-semibold text-slate-700">
+              <span>Stop Loss</span>
+              <input
+                type="number"
+                step="any"
+                value={Number.isFinite(tempSL) ? Number(tempSL.toFixed(tempSL < 5 ? 5 : 2)) : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v >= 0) setTempSL(v);
+                }}
+                className="w-24 text-right px-1.5 py-0.5 rounded bg-white border border-slate-300 text-rose-700 font-bold text-xs focus:outline-none focus:border-rose-600"
+              />
+            </div>
+            <input
+              type="range"
+              min={tempEntry * 0.85 || 1}
+              max={tempEntry * 1.15 || 1000}
+              step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
+              value={tempSL}
+              onChange={(e) => setTempSL(parseFloat(e.target.value))}
+              className="w-full accent-rose-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+            />
           </div>
-          <input
-            type="range"
-            min={tempEntry * 0.85 || 1}
-            max={tempEntry * 1.25 || 1200}
-            step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
-            value={tempTP1}
-            onChange={(e) => setTempTP1(parseFloat(e.target.value))}
-            className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
-          />
-        </div>
 
-        <div className="space-y-1">
-          <div className="flex justify-between font-semibold text-slate-700">
-            <span>TP2 (1.618)</span>
-            <span className="text-emerald-700 font-bold">{formatPrice(tempTP2, symbol)}</span>
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center font-semibold text-slate-700">
+              <span>TP1</span>
+              <input
+                type="number"
+                step="any"
+                value={Number.isFinite(tempTP1) ? Number(tempTP1.toFixed(tempTP1 < 5 ? 5 : 2)) : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v >= 0) setTempTP1(v);
+                }}
+                className="w-24 text-right px-1.5 py-0.5 rounded bg-white border border-slate-300 text-emerald-700 font-bold text-xs focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+            <input
+              type="range"
+              min={tempEntry * 0.85 || 1}
+              max={tempEntry * 1.25 || 1200}
+              step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
+              value={tempTP1}
+              onChange={(e) => setTempTP1(parseFloat(e.target.value))}
+              className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+            />
           </div>
-          <input
-            type="range"
-            min={tempEntry * 0.85 || 1}
-            max={tempEntry * 1.35 || 1300}
-            step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
-            value={tempTP2}
-            onChange={(e) => setTempTP2(parseFloat(e.target.value))}
-            className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
-          />
+
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center font-semibold text-slate-700">
+              <span>TP2</span>
+              <input
+                type="number"
+                step="any"
+                value={Number.isFinite(tempTP2) ? Number(tempTP2.toFixed(tempTP2 < 5 ? 5 : 2)) : 0}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  if (Number.isFinite(v) && v >= 0) setTempTP2(v);
+                }}
+                className="w-24 text-right px-1.5 py-0.5 rounded bg-white border border-slate-300 text-emerald-700 font-bold text-xs focus:outline-none focus:border-emerald-600"
+              />
+            </div>
+            <input
+              type="range"
+              min={tempEntry * 0.85 || 1}
+              max={tempEntry * 1.35 || 1400}
+              step={symbol.lotStepValue || (tempEntry < 5 ? 0.0001 : 0.1)}
+              value={tempTP2}
+              onChange={(e) => setTempTP2(parseFloat(e.target.value))}
+              className="w-full accent-emerald-600 h-1.5 bg-slate-300 rounded-lg appearance-none cursor-pointer"
+            />
+          </div>
         </div>
       </div>
     </div>

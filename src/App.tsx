@@ -24,15 +24,24 @@ import {
   Code,
   ArrowLeft,
   Search,
+  Cloud,
+  History,
+  Sliders,
 } from "lucide-react";
 import { SYNTHETIC_SYMBOLS, SyntheticSymbol, MarketClassType } from "./data/symbols";
 import {
   Trade,
+  SavedAnalysisReport,
   saveTrade,
   deleteTrade,
   updateTradeStatus,
   updateTradeNotes,
   subscribeTrades,
+  saveAnalysisReport,
+  subscribeAnalysisReports,
+  deleteAnalysisReport,
+  getUserPreferences,
+  saveUserPreferences,
 } from "./lib/db";
 import { exportTradeToPDF } from "./lib/pdfExport";
 import RiskCalculator from "./components/RiskCalculator";
@@ -41,6 +50,7 @@ import InteractiveCanvas from "./components/InteractiveCanvas";
 import ChatSidebar from "./components/ChatSidebar";
 import TradeSettlementForm from "./components/TradeSettlementForm";
 import PnlGrowthChart from "./components/PnlGrowthChart";
+import { JournalAnalytics } from "./components/JournalAnalytics";
 import QuickNoteModal from "./components/QuickNoteModal";
 import LiveTradingViewChart, { DivergenceInfo } from "./components/LiveTradingViewChart";
 import PineScriptGenerator from "./components/PineScriptGenerator";
@@ -49,9 +59,8 @@ import { PWAInstallBanner } from "./components/PWAInstallBanner";
 import { QuantAnalyzerPanel } from "./components/QuantAnalyzerPanel";
 import { VisionReportView } from "./components/VisionReportView";
 import { MarketDataProvider } from "./context/MarketDataContext";
+import { useFirebase } from "./contexts/FirebaseContext";
 import { cacheChartStateToSW } from "./lib/usePWAInstall";
-import { auth as firebaseAuth } from "./lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
 import { getUserLearnings } from "./lib/firebaseChat";
 import { useMarketData } from "./hooks/useMarketData";
 import {
@@ -388,10 +397,41 @@ function QuantWorkstation({
   const [journalSaveStatus, setJournalSaveStatus] = useState<
     "idle" | "saved" | "error"
   >("idle");
-  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const {
+    user: firebaseUser,
+    isAuthReady,
+    signInWithGoogle,
+    authLoading,
+    refreshLocalCount,
+  } = useFirebase();
 
-  // Journal Trades state
+  // Journal Trades & Saved AI Scans state
   const [trades, setTrades] = useState<Trade[]>([]);
+  const [savedReports, setSavedReports] = useState<SavedAnalysisReport[]>([]);
+  const prefsLoadedForUid = useRef<string | null>(null);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  const [brokerOffsets, setBrokerOffsets] = useState<Record<string, number>>(() => {
+    try {
+      const raw = localStorage.getItem("quant_smc_broker_offsets");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
+  const currentBrokerOffset = Number(brokerOffsets[symbol.ticker]) || 0;
+  const handleBrokerOffsetChange = (val: string) => {
+    const parsed = parseFloat(val);
+    const nextVal = Number.isFinite(parsed) ? parsed : 0;
+    setBrokerOffsets((prev) => {
+      const updated = { ...prev, [symbol.ticker]: nextVal };
+      try {
+        localStorage.setItem("quant_smc_broker_offsets", JSON.stringify(updated));
+      } catch {
+        // ignore storage quota errors
+      }
+      return updated;
+    });
+  };
   const [journalFilter, setJournalFilter] = useState<
     "ALL" | "PENDING" | "WON" | "LOST" | "BREAKEAVEN"
   >("ALL");
@@ -489,13 +529,49 @@ function QuantWorkstation({
     "Formulating optimal Risk-Reward parameters...",
   ];
 
+  // Hydrate cloud UserPreferences once per signed-in user
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(firebaseAuth, (user) => {
-      setFirebaseUser(user);
-      setDbConfigUpdated((prev) => prev + 1);
-    });
-    return () => unsubscribe();
-  }, []);
+    if (!isAuthReady || !firebaseUser) {
+      prefsLoadedForUid.current = null;
+      return;
+    }
+    if (prefsLoadedForUid.current === firebaseUser.uid) return;
+    prefsLoadedForUid.current = firebaseUser.uid;
+
+    getUserPreferences()
+      .then((prefs) => {
+        if (!prefs) return;
+        if (prefs.tradingStyle === "SCALP" || prefs.tradingStyle === "NORMAL") {
+          setTradingStyle(prefs.tradingStyle);
+        }
+        if (prefs.defaultTimeframe) {
+          setTimeframe(prefs.defaultTimeframe);
+        }
+        if (prefs.defaultSymbol) {
+          const found = SYNTHETIC_SYMBOLS.find((s) => s.ticker === prefs.defaultSymbol);
+          if (found) {
+            setSymbol(found);
+            setMarketClassFilter(found.marketType);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not load cloud user preferences:", err);
+      });
+  }, [isAuthReady, firebaseUser]);
+
+  // Debounced auto-sync of UserPreferences to Firestore when signed in
+  useEffect(() => {
+    if (!isAuthReady || !firebaseUser || prefsLoadedForUid.current !== firebaseUser.uid) return;
+    const timer = setTimeout(() => {
+      saveUserPreferences({
+        tradingStyle,
+        defaultSymbol: symbol.ticker,
+        defaultTimeframe: timeframe,
+      }).catch((err) => console.warn("Could not sync user preferences:", err));
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [isAuthReady, firebaseUser, tradingStyle, symbol.ticker, timeframe]);
 
   useEffect(() => {
     if (analysisResult?.tradeSetup) {
@@ -515,8 +591,10 @@ function QuantWorkstation({
     }
   }, [analysisResult]);
 
+  // Attach Firestore real-time listeners only after auth readiness is confirmed
   useEffect(() => {
-    const unsubscribe = subscribeTrades(
+    if (!isAuthReady) return;
+    const unsubTrades = subscribeTrades(
       (list) => {
         setTrades(list);
       },
@@ -524,8 +602,19 @@ function QuantWorkstation({
         console.error("Sync journal logs failure:", err);
       }
     );
-    return () => unsubscribe();
-  }, [dbConfigUpdated, activeTab]);
+    const unsubReports = subscribeAnalysisReports(
+      (reports) => {
+        setSavedReports(reports);
+      },
+      (err) => {
+        console.error("Sync analysis reports failure:", err);
+      }
+    );
+    return () => {
+      unsubTrades();
+      unsubReports();
+    };
+  }, [isAuthReady, firebaseUser?.uid, dbConfigUpdated, activeTab]);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -661,8 +750,9 @@ function QuantWorkstation({
       setAnalysisProgress(loadingPhrases[phraseIdx]);
     }, 1200);
 
-    // Exact live price from our shared Bybit / Deriv WebSocket stream (never defaults to R_75!)
-    const liveSpotPrice = latestCandle?.close || (candles.length > 0 ? candles[candles.length - 1].close : symbol.defaultPrice);
+    // Exact live price from our shared Bybit / Deriv WebSocket stream (+ optional broker spread offset)
+    const rawSpotPrice = latestCandle?.close || (candles.length > 0 ? candles[candles.length - 1].close : symbol.defaultPrice);
+    const liveSpotPrice = rawSpotPrice + currentBrokerOffset;
 
     // Compute exact real-time technical data tailored to Scalp or Normal trade style
     const freshQuantEval = evaluateMultiFactorConfluence(
@@ -678,9 +768,11 @@ function QuantWorkstation({
     );
     const quantContext = buildQuantContextPayload(
       freshQuantEval,
-      liveSpotPrice,
+      rawSpotPrice,
       liveDivergences,
-      trades
+      trades,
+      candles,
+      currentBrokerOffset
     );
 
     try {
@@ -688,7 +780,19 @@ function QuantWorkstation({
       try {
         learningsData = await getUserLearnings();
       } catch (le) {
-        console.warn("Could not fetch user learnings:", le);
+        console.warn("Could not fetch cloud user learnings:", le);
+      }
+      // Also merge guest/free-mode local rules saved from AI Post-Trade Debrief
+      try {
+        const localRaw = localStorage.getItem("synthetic_smc_local_learnings");
+        if (localRaw) {
+          const localRules = JSON.parse(localRaw);
+          if (Array.isArray(localRules)) {
+            learningsData = [...learningsData, ...localRules].slice(0, 12);
+          }
+        }
+      } catch {
+        // ignore parse errors
       }
 
       let compressedImages: string[] = [];
@@ -748,6 +852,12 @@ function QuantWorkstation({
         setAnalysisResult(parsed.data);
         setAnalyzerSubTab("analysis");
         setErrorMessage("");
+        void saveAnalysisReport({
+          symbol: customSymbolText ? customSymbolText : symbol.ticker,
+          timeframe,
+          tradingStyle,
+          analysis: parsed.data,
+        }).catch((saveErr) => console.warn("Could not save scan report:", saveErr));
         return;
       }
       throw new Error(parsed?.error || "Server response requires local deterministic calculation");
@@ -919,6 +1029,12 @@ function QuantWorkstation({
       setAnalysisResult(localResult);
       setAnalyzerSubTab("analysis");
       setErrorMessage("");
+      void saveAnalysisReport({
+        symbol: customSymbolText ? customSymbolText : symbol.ticker,
+        timeframe,
+        tradingStyle,
+        analysis: localResult,
+      }).catch((saveErr) => console.warn("Could not save fallback scan report:", saveErr));
     } finally {
       clearInterval(phraseInterval);
       setIsAnalyzing(false);
@@ -934,6 +1050,7 @@ function QuantWorkstation({
       const dbPayload = {
         symbol: customSymbolText ? customSymbolText : symbol.ticker,
         timeframe: timeframe,
+        trading_style: tradingStyle,
         bias: analysisResult.bias,
         entry_price: Number(analysisResult.tradeSetup.entry) || 0.0,
         stop_loss: Number(analysisResult.tradeSetup.stopLoss) || 0.0,
@@ -942,7 +1059,7 @@ function QuantWorkstation({
         image_url: imagePreview || "",
         notes:
           tradeNotes.trim() ||
-          `Automated target strategy for ${symbol.ticker} at ${timeframe}`,
+          `${tradingStyle === "SCALP" ? "Scalp" : "Normal"} trade setup for ${symbol.ticker} (${timeframe})`,
         status: "PENDING" as const,
         analysis_info: {
           marketStructure: analysisResult.marketStructure,
@@ -955,6 +1072,7 @@ function QuantWorkstation({
       };
 
       await saveTrade(dbPayload);
+      refreshLocalCount();
       setJournalSaveStatus("saved");
       setTradeNotes("");
       setDbConfigUpdated((prev) => prev + 1);
@@ -1110,10 +1228,31 @@ function QuantWorkstation({
             </button>
           </nav>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            {firebaseUser ? (
+              <button
+                type="button"
+                onClick={() => setActiveTab("databases")}
+                title={`Synced as ${firebaseUser.email || "Google user"}`}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-colors cursor-pointer"
+              >
+                <span className="h-2 w-2 rounded-full bg-emerald-600" />
+                <span>Cloud Synced</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void signInWithGoogle()}
+                disabled={authLoading}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-slate-300 hover:border-emerald-400 transition-colors cursor-pointer"
+              >
+                <Cloud className="h-3.5 w-3.5 text-emerald-600" />
+                <span>{authLoading ? "Signing in..." : "Cloud Sync"}</span>
+              </button>
+            )}
             <button
               onClick={navigateToLanding}
-              className="hidden lg:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB] border border-slate-300 transition-colors cursor-pointer"
+              className="hidden xl:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 hover:text-slate-900 hover:bg-[#DFE4EB] border border-slate-300 transition-colors cursor-pointer"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Overview</span>
@@ -1123,7 +1262,7 @@ function QuantWorkstation({
               className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 transition-all cursor-pointer"
             >
               <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-              <span className="hidden sm:inline">SMC Mentor</span>
+              <span className="hidden sm:inline">Trading Coach</span>
             </button>
           </div>
         </div>
@@ -1188,9 +1327,25 @@ function QuantWorkstation({
             TAB 1: MULTI-ASSET QUANT TERMINAL
         ========================================== */}
         {activeTab === "analyzer" && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="space-y-4">
+            {/* Mobile Compact Controls Toggle (keeps Live Chart & Setup above the fold on phones) */}
+            <div className="lg:hidden flex items-center justify-between bg-[#F1F4F8] border border-slate-300 rounded-xl px-4 py-2.5">
+              <div className="text-xs font-mono font-bold text-slate-900">
+                {symbol.ticker} · {timeframe} · {tradingStyle === "SCALP" ? "SCALP" : "NORMAL"}
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileControlsOpen((v) => !v)}
+                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sliders className="h-3.5 w-3.5" />
+                <span>{mobileControlsOpen ? "Hide Controls" : "Market & Style"}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT SIDEBAR: INSTRUMENT & VISION SCANNER */}
-            <div className="lg:col-span-4 space-y-5">
+            <div className={`lg:col-span-4 space-y-5 ${mobileControlsOpen ? "block" : "hidden lg:block"}`}>
               {/* 1. Instrument & Timeframe Configuration */}
               <div className="bg-[#F1F4F8] border border-slate-300/80 rounded-xl p-5 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-300/60 pb-3">
@@ -1366,18 +1521,34 @@ function QuantWorkstation({
                   </div>
                 </div>
 
-                {/* Custom Instrument Override */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Custom Ticker Override (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    value={customSymbolText}
-                    onChange={(e) => setCustomSymbolText(e.target.value)}
-                    placeholder="e.g., NAS100, US30, USD/CAD..."
-                    className="w-full bg-[#E8ECF2] border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-lg px-3 py-2 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none transition-colors"
-                  />
+                {/* Custom Instrument Override & Broker Price Offset */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Custom Ticker
+                    </label>
+                    <input
+                      type="text"
+                      value={customSymbolText}
+                      onChange={(e) => setCustomSymbolText(e.target.value)}
+                      placeholder="e.g., NAS100, US30"
+                      className="w-full bg-[#E8ECF2] border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-lg px-3 py-2 text-xs text-slate-900 placeholder:text-slate-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Broker Offset ({currentBrokerOffset >= 0 ? "+" : ""}{currentBrokerOffset})
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={currentBrokerOffset === 0 ? "" : currentBrokerOffset}
+                      onChange={(e) => handleBrokerOffsetChange(e.target.value)}
+                      placeholder="0.00 (e.g. +2.5)"
+                      title="Adjust feed price to match your broker's exact quote (Exness, ICMarkets, FTMO, Deriv)"
+                      className="w-full bg-[#E8ECF2] border border-slate-300 focus:border-emerald-600 focus:bg-white rounded-lg px-3 py-2 text-xs font-mono text-slate-900 placeholder:text-slate-500 focus:outline-none transition-colors"
+                    />
+                  </div>
                 </div>
 
                 {/* Trading Style Selector: Scalp vs Normal Trade */}
@@ -1825,6 +1996,65 @@ function QuantWorkstation({
               {/* HYBRID AI + QUANT REPORT VIEW */}
               {analyzerSubTab === "analysis" && (
                 <div className="space-y-5">
+                  {savedReports.length > 0 && !isAnalyzing && (
+                    <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-800">
+                          <History className="h-3.5 w-3.5 text-emerald-600" />
+                          <span>
+                            Recent {firebaseUser ? "Cloud-Synced" : "Local"} Scans ({savedReports.length})
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-500">
+                          Click any scan to reload
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                        {savedReports.slice(0, 8).map((rep) => (
+                          <div
+                            key={rep.id}
+                            onClick={() => {
+                              if (rep.reportData) {
+                                setAnalysisResult(rep.reportData);
+                                setTradingStyle(rep.tradingStyle);
+                              }
+                            }}
+                            className="shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#E8ECF2] hover:bg-emerald-50 border border-slate-300 hover:border-emerald-400 text-xs cursor-pointer transition-colors"
+                          >
+                            <span className="font-mono font-bold text-slate-900">{rep.symbol}</span>
+                            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white border border-slate-300 text-slate-700">
+                              {rep.tradingStyle === "SCALP" ? "SCALP" : "NORMAL"} · {rep.timeframe}
+                            </span>
+                            <span
+                              className={`text-[10px] font-mono font-bold ${
+                                rep.bias === "BULLISH"
+                                  ? "text-emerald-700"
+                                  : rep.bias === "BEARISH"
+                                  ? "text-rose-700"
+                                  : "text-slate-600"
+                              }`}
+                            >
+                              {rep.bias}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void deleteAnalysisReport(rep.id).catch((err) =>
+                                  console.warn("Delete scan report failed:", err)
+                                );
+                              }}
+                              title="Remove saved scan"
+                              className="text-slate-400 hover:text-rose-600 p-0.5 cursor-pointer"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {isAnalyzing ? (
                     <div className="bg-[#F1F4F8] border border-slate-300 rounded-xl p-12 text-center space-y-4">
                       <div className="h-12 w-12 rounded-full bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-600">
@@ -1945,6 +2175,7 @@ function QuantWorkstation({
               )}
             </div>
           </div>
+          </div>
         )}
 
         {/* ==========================================
@@ -2008,6 +2239,13 @@ function QuantWorkstation({
                 </p>
               </div>
             </div>
+
+            <JournalAnalytics
+              trades={trades}
+              activeSymbol={symbol}
+              livePrice={(latestCandle?.close || symbol.defaultPrice) + currentBrokerOffset}
+              isSignedIn={Boolean(firebaseUser)}
+            />
 
             <PnlGrowthChart trades={trades} />
 

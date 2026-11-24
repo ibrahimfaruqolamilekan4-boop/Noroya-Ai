@@ -1543,15 +1543,150 @@ export function evaluateLiveTick(
   };
 }
 
+export interface MarketRegimeTelemetry {
+  regime: "TRENDING_UP" | "TRENDING_DOWN" | "RANGING" | "SQUEEZE_BREAKOUT" | "CHOPPY_HIGH_VOL";
+  regimeLabel: string;
+  ema20: number;
+  ema50: number;
+  ema200: number | null;
+  rsi14: number;
+  adx14: number;
+  vwap: number;
+  bbWidthPct: number;
+  isSqueeze: boolean;
+  priceVsEma20Pct: number;
+  summary: string;
+}
+
+function calcEmaSeries(values: number[], period: number): number[] {
+  if (values.length === 0) return [];
+  const k = 2 / (period + 1);
+  const out: number[] = [values[0]];
+  for (let i = 1; i < values.length; i++) {
+    out.push(values[i] * k + out[i - 1] * (1 - k));
+  }
+  return out;
+}
+
+export function computeMarketRegimeTelemetry(candles: StandardCandle[]): MarketRegimeTelemetry | null {
+  if (!candles || candles.length < 22) return null;
+
+  const closes = candles.map((c) => c.close);
+  const last = candles[candles.length - 1];
+  const ema20Arr = calcEmaSeries(closes, 20);
+  const ema50Arr = calcEmaSeries(closes, 50);
+  const ema200Arr = closes.length >= 120 ? calcEmaSeries(closes, Math.min(200, closes.length)) : null;
+
+  const ema20 = ema20Arr[ema20Arr.length - 1];
+  const ema50 = ema50Arr[ema50Arr.length - 1];
+  const ema200 = ema200Arr ? ema200Arr[ema200Arr.length - 1] : null;
+
+  // RSI(14)
+  let gains = 0;
+  let losses = 0;
+  const rsiPeriod = 14;
+  for (let i = closes.length - rsiPeriod; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  const avgGain = gains / rsiPeriod;
+  const avgLoss = losses / rsiPeriod;
+  const rsi14 = avgLoss === 0 ? 100 : Number((100 - 100 / (1 + avgGain / avgLoss)).toFixed(1));
+
+  // ADX(14) approximation for trend strength
+  let plusDmSum = 0;
+  let minusDmSum = 0;
+  let trSum = 0;
+  const adxStart = Math.max(1, candles.length - 14);
+  for (let i = adxStart; i < candles.length; i++) {
+    const curr = candles[i];
+    const prev = candles[i - 1];
+    const upMove = curr.high - prev.high;
+    const downMove = prev.low - curr.low;
+    if (upMove > downMove && upMove > 0) plusDmSum += upMove;
+    if (downMove > upMove && downMove > 0) minusDmSum += downMove;
+    trSum += Math.max(
+      curr.high - curr.low,
+      Math.abs(curr.high - prev.close),
+      Math.abs(curr.low - prev.close)
+    );
+  }
+  const plusDi = trSum > 0 ? (plusDmSum / trSum) * 100 : 0;
+  const minusDi = trSum > 0 ? (minusDmSum / trSum) * 100 : 0;
+  const adx14 =
+    plusDi + minusDi > 0
+      ? Number(((Math.abs(plusDi - minusDi) / (plusDi + minusDi)) * 100).toFixed(1))
+      : 15;
+
+  // Bollinger Band width (20)
+  const slice20 = closes.slice(-20);
+  const mean20 = slice20.reduce((a, b) => a + b, 0) / slice20.length;
+  const variance = slice20.reduce((a, b) => a + (b - mean20) ** 2, 0) / slice20.length;
+  const std20 = Math.sqrt(variance);
+  const bbWidthPct = mean20 > 0 ? Number((((4 * std20) / mean20) * 100).toFixed(3)) : 0;
+
+  // Session VWAP (last 30 bars)
+  const vwapSlice = candles.slice(-30);
+  let pvSum = 0;
+  let volSum = 0;
+  for (const c of vwapSlice) {
+    const typical = (c.high + c.low + c.close) / 3;
+    const v = c.volume > 0 ? c.volume : 1;
+    pvSum += typical * v;
+    volSum += v;
+  }
+  const vwap = volSum > 0 ? pvSum / volSum : last.close;
+
+  const priceVsEma20Pct = ema20 > 0 ? Number((((last.close - ema20) / ema20) * 100).toFixed(3)) : 0;
+  const isSqueeze = bbWidthPct > 0 && bbWidthPct < 0.35;
+
+  let regime: MarketRegimeTelemetry["regime"] = "RANGING";
+  let regimeLabel = "Sideways / Ranging Market";
+  if (isSqueeze) {
+    regime = "SQUEEZE_BREAKOUT";
+    regimeLabel = "Tight Volatility Squeeze (Breakout Brewing)";
+  } else if (adx14 >= 26 && ema20 > ema50 && last.close >= ema20) {
+    regime = "TRENDING_UP";
+    regimeLabel = "Clean Uptrend (Buy Pullbacks)";
+  } else if (adx14 >= 26 && ema20 < ema50 && last.close <= ema20) {
+    regime = "TRENDING_DOWN";
+    regimeLabel = "Clean Downtrend (Sell Pullbacks)";
+  } else if (bbWidthPct > 2.4 && adx14 < 22) {
+    regime = "CHOPPY_HIGH_VOL";
+    regimeLabel = "Choppy High Volatility (Wait for Confirmation)";
+  }
+
+  return {
+    regime,
+    regimeLabel,
+    ema20,
+    ema50,
+    ema200,
+    rsi14,
+    adx14,
+    vwap,
+    bbWidthPct,
+    isSqueeze,
+    priceVsEma20Pct,
+    summary: `${regimeLabel} · ADX ${adx14} · RSI(14) ${rsi14} · Price ${
+      priceVsEma20Pct >= 0 ? "+" : ""
+    }${priceVsEma20Pct}% vs EMA20`,
+  };
+}
+
 /**
- * Builds a clean, compact JSON payload of exact computed price-action mathematics
+ * Builds a clean, compact JSON payload of exact computed price-action mathematics,
+ * market regime indicators, recent OHLCV bars, and closed-loop journal performance
  * to feed into the Hybrid AI Chart Analyzer backend.
  */
 export function buildQuantContextPayload(
   evaluation: QuantitativeEvaluation,
   livePrice: number,
   rsiDivergences: { type: string; valRsi1: number; valRsi2: number }[] = [],
-  tradeHistory: any[] = []
+  tradeHistory: any[] = [],
+  candles: StandardCandle[] = [],
+  brokerOffset: number = 0
 ) {
   const symTrades = tradeHistory.filter(
     (t) =>
@@ -1561,18 +1696,39 @@ export function buildQuantContextPayload(
   const symWins = symTrades.filter((t) => t.status === "WON").length;
   const symLosses = symTrades.filter((t) => t.status === "LOST").length;
 
+  const scalpTrades = tradeHistory.filter((t) => t.trading_style === "SCALP" && (t.status === "WON" || t.status === "LOST"));
+  const normalTrades = tradeHistory.filter((t) => t.trading_style !== "SCALP" && (t.status === "WON" || t.status === "LOST"));
+  const scalpWins = scalpTrades.filter((t) => t.status === "WON").length;
+  const normalWins = normalTrades.filter((t) => t.status === "WON").length;
+
+  const recentLossNotes = symTrades
+    .filter((t) => t.status === "LOST" && t.notes)
+    .slice(0, 4)
+    .map((t) => `${t.timeframe} ${t.bias} (${t.trading_style || "NORMAL"}): ${String(t.notes).slice(0, 140)}`);
+
+  const marketRegime = computeMarketRegimeTelemetry(candles);
+  const recentCandles = candles.slice(-16).map((c) => ({
+    o: Number((c.open + brokerOffset).toFixed(livePrice < 5 ? 5 : 2)),
+    h: Number((c.high + brokerOffset).toFixed(livePrice < 5 ? 5 : 2)),
+    l: Number((c.low + brokerOffset).toFixed(livePrice < 5 ? 5 : 2)),
+    c: Number((c.close + brokerOffset).toFixed(livePrice < 5 ? 5 : 2)),
+  }));
+
   return {
     symbol: evaluation.symbol.ticker,
     assetName: evaluation.symbol.name,
     marketType: evaluation.symbol.marketType,
     timeframe: evaluation.timeframe,
     tradingStyle: evaluation.tradingStyle,
-    livePrice,
+    livePrice: livePrice + brokerOffset,
+    brokerOffsetApplied: brokerOffset,
     directionalBias: evaluation.directionalBias,
     confluenceScorePct: evaluation.confluenceScorePct,
     alignedModulesCount: evaluation.alignedModulesCount,
     highProbabilityTrigger: evaluation.highProbabilityTrigger,
     confluenceFormula: evaluation.confluenceFormulaBanner,
+    marketRegime,
+    recentCandles,
     structure: evaluation.smcStructure,
     mtf: {
       d1Bias: evaluation.mtfAlignment.d1.bias,
@@ -1603,6 +1759,9 @@ export function buildQuantContextPayload(
       wins: symWins,
       losses: symLosses,
       winRatePct: symTrades.length > 0 ? Math.round((symWins / symTrades.length) * 100) : null,
+      scalpWinRatePct: scalpTrades.length > 0 ? Math.round((scalpWins / scalpTrades.length) * 100) : null,
+      normalWinRatePct: normalTrades.length > 0 ? Math.round((normalWins / normalTrades.length) * 100) : null,
+      recentLossNotes,
     },
   };
 }

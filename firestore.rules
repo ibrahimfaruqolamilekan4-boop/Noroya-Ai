@@ -2,28 +2,27 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // 1. Global Catch-All Security Net
+    // 1. Global Catch-All Security Net (Default Deny)
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // 2. Global Helper Functions (Phase 3 primitives)
+    // 2. Global Helper Primitives
     function isSignedIn() {
       return request.auth != null;
     }
-    
-    function isAdmin() {
-      return isSignedIn() 
-        && request.auth.token.email == 'ibrahimfaruqolamilekan4@gmail.com' 
-        && request.auth.token.email_verified == true;
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
-    
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
+
+    function isAdmin() {
+      return isVerifiedUser()
+        && request.auth.token.email == 'ibrahimfaruqolamilekan4@gmail.com';
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function incoming() {
@@ -34,111 +33,224 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // 3. Trade Specific Validation Helper
+    // 3. Entity Validation Blueprints (Anti-Update-Gap)
     function isValidTrade(data) {
-      return data.userId is string 
-        && data.userId.size() <= 128
-        && data.userId == request.auth.uid // Enforce identity matching
-        && data.symbol is string 
-        && data.symbol.size() <= 128
-        && data.timeframe is string 
-        && data.timeframe.size() <= 32
-        && data.bias is string 
+      return data.keys().hasAll(['userId', 'created_at', 'symbol', 'timeframe', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'status'])
+        && data.keys().hasOnly(['userId', 'created_at', 'symbol', 'timeframe', 'trading_style', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'risk_reward', 'image_url', 'notes', 'status', 'analysis_info', 'exit_price', 'pnl'])
+        && data.userId is string
+        && isValidId(data.userId)
+        && (data.userId == request.auth.uid || isAdmin())
+        && data.symbol is string
+        && data.symbol.size() >= 1
+        && data.symbol.size() <= 64
+        && data.timeframe is string
+        && data.timeframe.size() >= 1
+        && data.timeframe.size() <= 16
+        && (!('trading_style' in data) || data.trading_style == null || (data.trading_style is string && data.trading_style in ['SCALP', 'NORMAL']))
+        && data.bias is string
+        && data.bias.size() >= 1
         && data.bias.size() <= 32
-        && data.entry_price is number 
+        && data.entry_price is number
         && data.entry_price >= 0.0
-        && data.stop_loss is number 
+        && data.stop_loss is number
         && data.stop_loss >= 0.0
-        && data.take_profit is number 
+        && data.take_profit is number
         && data.take_profit >= 0.0
-        && data.risk_reward is string 
-        && data.risk_reward.size() <= 32
+        && (!('risk_reward' in data) || data.risk_reward == null || (data.risk_reward is string && data.risk_reward.size() <= 32))
         && data.status is string
-        && (data.status == 'PENDING' || data.status == 'WON' || data.status == 'LOST' || data.status == 'BREAKEAVEN')
-        && (!('exit_price' in data) || data.exit_price == null || data.exit_price is number)
+        && data.status in ['PENDING', 'WON', 'LOST', 'BREAKEAVEN']
+        && (!('exit_price' in data) || data.exit_price == null || (data.exit_price is number && data.exit_price >= 0.0))
         && (!('pnl' in data) || data.pnl == null || data.pnl is number)
-        && (data.image_url == null || (data.image_url is string && data.image_url.size() <= 10485760)) // Up to 10MB base64 content
-        && (data.notes == null || (data.notes is string && data.notes.size() <= 50000));
+        && (!('image_url' in data) || data.image_url == null || (data.image_url is string && data.image_url.size() <= 350000))
+        && (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 20000))
+        && (!('analysis_info' in data) || data.analysis_info == null || data.analysis_info is map);
     }
 
-    // 4. Matches routes for trades
-    match /trades/{tradeId} {
-      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-      
-      // Enforce server timestamp logic for created_at on creation
-      allow create: if isSignedIn() 
-        && isValidId(tradeId)
-        && isValidTrade(incoming()) 
-        && incoming().created_at == request.time
-        && incoming().keys().hasAll(['userId', 'created_at', 'symbol', 'timeframe', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'status']);
+    function isValidChat(data) {
+      return data.keys().hasAll(['userId', 'message', 'sender', 'created_at'])
+        && data.keys().hasOnly(['userId', 'message', 'sender', 'created_at'])
+        && data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.message is string
+        && data.message.size() >= 1
+        && data.message.size() <= 20000
+        && data.sender is string
+        && data.sender in ['user', 'bot'];
+    }
 
-      // Enforce immutability of fields on update
-      allow update: if isSignedIn() 
+    function isValidLearning(data) {
+      return data.keys().hasAll(['userId', 'learnings', 'category', 'created_at'])
+        && data.keys().hasOnly(['userId', 'learnings', 'symbol', 'category', 'created_at'])
+        && data.userId is string
+        && isValidId(data.userId)
+        && (data.userId == request.auth.uid || isAdmin())
+        && data.learnings is string
+        && data.learnings.size() >= 1
+        && data.learnings.size() <= 3000
+        && data.category is string
+        && data.category.size() >= 1
+        && data.category.size() <= 64
+        && (!('symbol' in data) || data.symbol == null || (data.symbol is string && data.symbol.size() <= 64));
+    }
+
+    function isValidAnalysisReport(data) {
+      return data.keys().hasAll(['userId', 'symbol', 'timeframe', 'tradingStyle', 'bias', 'confluenceScorePct', 'entry', 'stopLoss', 'tp1', 'created_at'])
+        && data.keys().hasOnly(['userId', 'symbol', 'timeframe', 'tradingStyle', 'bias', 'confluenceScorePct', 'summary', 'entry', 'stopLoss', 'tp1', 'riskReward', 'reportData', 'created_at'])
+        && data.userId is string
+        && isValidId(data.userId)
+        && data.userId == request.auth.uid
+        && data.symbol is string
+        && data.symbol.size() >= 1
+        && data.symbol.size() <= 64
+        && data.timeframe is string
+        && data.timeframe.size() >= 1
+        && data.timeframe.size() <= 16
+        && data.tradingStyle is string
+        && data.tradingStyle in ['SCALP', 'NORMAL']
+        && data.bias is string
+        && data.bias.size() >= 1
+        && data.bias.size() <= 32
+        && data.confluenceScorePct is number
+        && data.confluenceScorePct >= 0
+        && data.confluenceScorePct <= 100
+        && (!('summary' in data) || data.summary == null || (data.summary is string && data.summary.size() <= 2000))
+        && data.entry is number
+        && data.entry >= 0.0
+        && data.stopLoss is number
+        && data.stopLoss >= 0.0
+        && data.tp1 is number
+        && data.tp1 >= 0.0
+        && (!('riskReward' in data) || data.riskReward == null || (data.riskReward is string && data.riskReward.size() <= 32))
+        && (!('reportData' in data) || data.reportData == null || data.reportData is map);
+    }
+
+    function isValidUserPreferences(data, targetUserId) {
+      return data.keys().hasAll(['userId', 'tradingStyle', 'defaultSymbol', 'defaultTimeframe', 'updated_at'])
+        && data.keys().hasOnly(['userId', 'tradingStyle', 'defaultSymbol', 'defaultTimeframe', 'accountBalance', 'riskPercent', 'updated_at'])
+        && data.userId is string
+        && isValidId(data.userId)
+        && data.userId == targetUserId
+        && (data.userId == request.auth.uid || isAdmin())
+        && data.tradingStyle is string
+        && data.tradingStyle in ['SCALP', 'NORMAL']
+        && data.defaultSymbol is string
+        && data.defaultSymbol.size() >= 1
+        && data.defaultSymbol.size() <= 64
+        && data.defaultTimeframe is string
+        && data.defaultTimeframe.size() >= 1
+        && data.defaultTimeframe.size() <= 16
+        && (!('accountBalance' in data) || data.accountBalance == null || (data.accountBalance is number && data.accountBalance >= 0.0 && data.accountBalance <= 1000000000.0))
+        && (!('riskPercent' in data) || data.riskPercent == null || (data.riskPercent is number && data.riskPercent >= 0.05 && data.riskPercent <= 25.0));
+    }
+
+    // 4. Collection: /trades/{tradeId}
+    match /trades/{tradeId} {
+      allow get: if isSignedIn() && isValidId(tradeId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(tradeId)
         && isValidTrade(incoming())
-        && incoming().userId == existing().userId 
+        && incoming().userId == request.auth.uid
+        && incoming().created_at == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(tradeId)
+        && isValidTrade(incoming())
+        && incoming().userId == existing().userId
         && incoming().created_at == existing().created_at
         && (
-          // Action 1: Full Edit (by Owner only)
-          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAny(['symbol', 'timeframe', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'risk_reward', 'image_url', 'notes', 'status', 'analysis_info', 'exit_price', 'pnl']))
+          // Action 1: Update trade notes only
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['notes']))
           ||
-          // Action 2: Update status and exit results only
-          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasAny(['status', 'exit_price', 'pnl']))
+          // Action 2: Settle or update trade status / exit / pnl
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'exit_price', 'pnl']))
           ||
-          // Action 3: Admin Override
+          // Action 3: Full owner edit of mutable trade details
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['symbol', 'timeframe', 'trading_style', 'bias', 'entry_price', 'stop_loss', 'take_profit', 'risk_reward', 'image_url', 'notes', 'status', 'analysis_info', 'exit_price', 'pnl']))
+          ||
+          // Action 4: Admin override
           isAdmin()
         );
 
-      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
-
-      // Secure list query constraint
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isVerifiedUser() && isValidId(tradeId) && (existing().userId == request.auth.uid || isAdmin());
     }
 
-    // 5. Chat History Security Rules
-    function isValidChat(data) {
-      return data.userId is string 
-        && data.userId.size() <= 128
-        && data.userId == request.auth.uid
-        && data.message is string 
-        && data.message.size() <= 50000
-        && data.sender is string 
-        && (data.sender == 'user' || data.sender == 'bot');
-    }
-
+    // 5. Collection: /chat_history/{chatId}
     match /chat_history/{chatId} {
-      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(chatId) && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() 
+
+      allow create: if isVerifiedUser()
         && isValidId(chatId)
         && isValidChat(incoming())
         && incoming().created_at == request.time;
-      allow update, delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(chatId) && (existing().userId == request.auth.uid || isAdmin());
     }
 
-    // 6. User Learnings Security Rules
-    function isValidLearning(data) {
-      return data.userId is string
-        && data.userId.size() <= 128
-        && data.userId == request.auth.uid
-        && data.learnings is string
-        && data.learnings.size() <= 5000
-        && data.category is string
-        && data.category.size() <= 128
-        && (data.symbol == null || (data.symbol is string && data.symbol.size() <= 128));
-    }
-
+    // 6. Collection: /user_learnings/{learningId}
     match /user_learnings/{learningId} {
-      allow get: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow get: if isSignedIn() && isValidId(learningId) && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() 
+
+      allow create: if isVerifiedUser()
         && isValidId(learningId)
         && isValidLearning(incoming())
+        && incoming().userId == request.auth.uid
         && incoming().created_at == request.time;
-      allow update: if isSignedIn()
+
+      allow update: if isVerifiedUser()
+        && isValidId(learningId)
         && isValidLearning(incoming())
         && incoming().userId == existing().userId
-        && incoming().created_at == existing().created_at;
-      allow delete: if isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+        && incoming().created_at == existing().created_at
+        && (
+          (existing().userId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['learnings', 'symbol', 'category']))
+          || isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(learningId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 7. Collection: /analysis_reports/{reportId}
+    match /analysis_reports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isVerifiedUser()
+        && isValidId(reportId)
+        && isValidAnalysisReport(incoming())
+        && incoming().created_at == request.time;
+
+      allow update: if false;
+      allow delete: if isVerifiedUser() && isValidId(reportId) && (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // 8. Collection: /user_preferences/{userId}
+    match /user_preferences/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
+      allow list: if false;
+
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && request.auth.uid == userId
+        && isValidUserPreferences(incoming(), userId)
+        && incoming().updated_at == request.time;
+
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserPreferences(incoming(), userId)
+        && incoming().userId == existing().userId
+        && incoming().updated_at == request.time
+        && (
+          (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['tradingStyle', 'defaultSymbol', 'defaultTimeframe', 'accountBalance', 'riskPercent', 'updated_at']))
+          || isAdmin()
+        );
+
+      allow delete: if isVerifiedUser() && isValidId(userId) && (request.auth.uid == userId || isAdmin());
     }
   }
 }

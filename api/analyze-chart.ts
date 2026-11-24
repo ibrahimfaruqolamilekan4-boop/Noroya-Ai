@@ -1,6 +1,194 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+import { getAssetPlaybook } from "./_lib/playbooks.js";
 
 type TradingStyle = "SCALP" | "NORMAL";
+
+interface NewsRiskReport {
+  level: "NONE" | "LOW" | "MEDIUM" | "HIGH";
+  summary: string;
+  events: string[];
+  sources: { title: string; uri: string }[];
+}
+
+async function fetchLiveNewsRisk(
+  ai: GoogleGenAI,
+  symbol: string,
+  playbook: ReturnType<typeof getAssetPlaybook>
+): Promise<NewsRiskReport> {
+  if (!playbook.needsNewsCheck) {
+    return {
+      level: "NONE",
+      summary: "Synthetic Indices run 24/7 on an algorithmic volatility engine with zero fundamental news impact.",
+      events: [],
+      sources: [],
+    };
+  }
+
+  try {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5500));
+    const promptText = `Today is ${todayStr}. Check if there are any high-impact economic calendar events (CPI, NFP, FOMC, Powell speech, GDP, ECB/BoE/BoJ rates) or breaking market catalysts affecting ${symbol} (${playbook.newsQueryHint}) today or within the next 24 hours. Reply in 2 concise plain-English sentences starting with RISK_LEVEL: LOW, MEDIUM, or HIGH.`;
+    const searchPromise = (async () => {
+      for (const modelName of ["gemini-4-hydrogen", "gemini-3.1-flash-lite"]) {
+        try {
+          return await ai.models.generateContent({
+            model: modelName,
+            contents: promptText,
+            config: {
+              tools: [{ googleSearch: {} }],
+              ...(modelName.startsWith("gemini-4")
+                ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } }
+                : {}),
+            },
+          });
+        } catch {
+          // Try next model
+        }
+      }
+      return null;
+    })();
+
+    const response: any = await Promise.race([searchPromise, timeoutPromise]);
+    if (!response || !response.text) {
+      return {
+        level: "LOW",
+        summary: "No major breaking news alert returned; always check your broker calendar before entering around London/NY opens.",
+        events: [],
+        sources: [],
+      };
+    }
+
+    const text = String(response.text).trim();
+    const upper = text.toUpperCase();
+    const level: NewsRiskReport["level"] = upper.includes("RISK_LEVEL: HIGH")
+      ? "HIGH"
+      : upper.includes("RISK_LEVEL: MEDIUM")
+      ? "MEDIUM"
+      : "LOW";
+
+    const cleanedSummary = text
+      .replace(/RISK_LEVEL:\s*(HIGH|MEDIUM|LOW)\s*[-:.]?\s*/i, "")
+      .replace(/\s+/g, " ")
+      .slice(0, 420);
+
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources: { title: string; uri: string }[] = chunks
+      .filter((c: any) => c?.web?.uri)
+      .slice(0, 3)
+      .map((c: any) => ({
+        title: String(c.web.title || "Market News Source").slice(0, 80),
+        uri: String(c.web.uri),
+      }));
+
+    return {
+      level,
+      summary: cleanedSummary,
+      events: [],
+      sources,
+    };
+  } catch {
+    return {
+      level: "LOW",
+      summary: "Live economic calendar check skipped (timeout). Verify major USD/EUR/GBP releases before trading.",
+      events: [],
+      sources: [],
+    };
+  }
+}
+
+function runRiskCriticAudit(
+  result: any,
+  tradingStyle: TradingStyle,
+  quantContext: any,
+  newsRisk: NewsRiskReport
+) {
+  const warnings: string[] = [];
+  const ts = result?.tradeSetup || {};
+  const entry = Number(ts.entry) || 0;
+  const sl = Number(ts.stopLoss) || 0;
+  const tp1 = Array.isArray(ts.takeProfits) ? Number(ts.takeProfits[0]) || 0 : 0;
+  const tp2 = Array.isArray(ts.takeProfits) ? Number(ts.takeProfits[1]) || 0 : 0;
+  const livePrice = Number(quantContext?.livePrice) || 0;
+  const atr = Number(quantContext?.atr || quantContext?.structure?.atr) || 0;
+  const isScalp = tradingStyle === "SCALP";
+
+  let criticalFlaws = 0;
+
+  if (ts.type === "BUY" || ts.type === "SELL") {
+    const riskDist = Math.abs(entry - sl);
+    const reward1 = Math.abs(tp1 - entry);
+    const reward2 = Math.abs(tp2 - entry);
+
+    // 1. Stop Loss direction sanity
+    if ((ts.type === "BUY" && sl >= entry) || (ts.type === "SELL" && sl <= entry)) {
+      warnings.push("Stop Loss was placed on the wrong side of Entry — verify SL before placing order.");
+      criticalFlaws++;
+    }
+
+    // 2. Stop Loss too tight vs ATR
+    if (atr > 0 && riskDist > 0 && riskDist < atr * 0.45) {
+      warnings.push("Stop Loss is tighter than 0.45× ATR — high chance of getting wicked out by normal noise.");
+      criticalFlaws++;
+    }
+
+    // 3. Chasing check
+    if (atr > 0 && livePrice > 0 && Math.abs(entry - livePrice) > atr * (isScalp ? 1.8 : 3.2)) {
+      warnings.push("Entry sits relatively far from live spot price — use a Limit Order instead of chasing with a Market Order.");
+    }
+
+    // 4. Risk-to-Reward check
+    const rrCheck = riskDist > 0 ? Math.max(reward1, reward2) / riskDist : 0;
+    const minRR = isScalp ? 1.15 : 1.5;
+    if (riskDist > 0 && rrCheck < minRR) {
+      warnings.push(`Reward-to-Risk (${rrCheck.toFixed(2)}R) is below recommended minimum (${minRR}R) for a ${isScalp ? "Scalp" : "Normal"} trade.`);
+      criticalFlaws++;
+    }
+
+    // 5. Counter-HTF check on Normal trades
+    const d1 = String(quantContext?.mtf?.d1Bias || "").toUpperCase();
+    const h4 = String(quantContext?.mtf?.h4Bias || "").toUpperCase();
+    const fightingBothHtf =
+      (ts.type === "BUY" && d1 === "BEARISH" && h4 === "BEARISH") ||
+      (ts.type === "SELL" && d1 === "BULLISH" && h4 === "BULLISH");
+    if (!isScalp && fightingBothHtf) {
+      warnings.push("Caution: This Normal Trade goes against both the Daily (1D) and 4-Hour (4H) trends — cut size or wait for alignment.");
+    }
+
+    // 6. High-impact news trap on Scalps
+    if (newsRisk.level === "HIGH") {
+      warnings.push(
+        isScalp
+          ? "High-impact news risk detected today — spreads can spike sharply on tight scalps. Cut risk by 50% or wait until after the release."
+          : "High-impact economic event active today — expect extra volatility around the release window."
+      );
+    }
+
+    // 7. Choppy regime warning
+    if (quantContext?.marketRegime?.regime === "CHOPPY_HIGH_VOL") {
+      warnings.push("Market regime is currently choppy with high volatility — wait for a clean candle close at your zone.");
+    }
+  }
+
+  let verdictAdjusted = false;
+  if (criticalFlaws >= 2 && (ts.type === "BUY" || ts.type === "SELL")) {
+    result.tradeSetup.type = "WAIT";
+    result.tradeSetup.rationale = `Downgraded to WAIT by Risk Critic: ${warnings.join(" ")}`;
+    verdictAdjusted = true;
+  }
+
+  return {
+    passed: warnings.length === 0,
+    severity: criticalFlaws > 0 || newsRisk.level === "HIGH" ? "HIGH" : warnings.length > 0 ? "MEDIUM" : "LOW",
+    verdictAdjusted,
+    warnings,
+    summary:
+      warnings.length === 0
+        ? "Passed all 7 Risk Critic safety checks (SL placement, ATR cushion, R:R ratio, trend & news risk)."
+        : verdictAdjusted
+        ? "Risk Critic downgraded this setup to WAIT due to multiple risk traps."
+        : `Risk Critic flagged ${warnings.length} item${warnings.length === 1 ? "" : "s"} to watch before entering.`,
+  };
+}
 
 function getGeminiClient(customKey?: string): GoogleGenAI {
   const rawKey =
@@ -513,10 +701,13 @@ export default async function handler(req: any, res: any) {
     const customKey = (req.headers["x-gemini-key"] as string) || req.body?.geminiApiKey;
     const ai = getGeminiClient(customKey);
 
+    const playbook = getAssetPlaybook(symbol || quantContext?.symbol || "", quantContext?.marketType);
+    const newsRisk = await fetchLiveNewsRisk(ai, symbol || quantContext?.symbol || "Market", playbook);
+
     let reinforcementPrompt = "";
     if (Array.isArray(learnings) && learnings.length > 0) {
-      reinforcementPrompt += `\nTRADER'S PERSONAL RULES:\n${learnings
-        .slice(0, 8)
+      reinforcementPrompt += `\nTRADER'S PERSONAL RULES (MUST RESPECT & MENTION WHEN RELEVANT):\n${learnings
+        .slice(0, 10)
         .map((l: any, i: number) => `- Rule #${i + 1} (${l.category || "General"} / ${l.symbol || "All"}): ${l.learnings || l}`)
         .join("\n")}\n`;
     }
@@ -524,16 +715,25 @@ export default async function handler(req: any, res: any) {
     if (Array.isArray(tradeHistory) && tradeHistory.length > 0) {
       const won = tradeHistory.filter((t: any) => t.status === "WON");
       const lost = tradeHistory.filter((t: any) => t.status === "LOST");
-      const wr = Math.round((won.length / tradeHistory.length) * 100);
-      reinforcementPrompt += `\nTRADER'S JOURNAL RECORD: ${tradeHistory.length} trades, ${wr}% win rate (${won.length}W / ${lost.length}L).\n`;
+      const wr = Math.round((won.length / Math.max(1, won.length + lost.length)) * 100);
+      reinforcementPrompt += `\nCLOSED-LOOP JOURNAL RECORD: ${tradeHistory.length} trades, ${wr}% win rate (${won.length}W / ${lost.length}L).\n`;
       if (quantContext?.symbolJournalStats?.totalOnSymbol > 0) {
         const s = quantContext.symbolJournalStats;
-        reinforcementPrompt += `RECORD ON ${symbol}: ${s.totalOnSymbol} trades, ${s.winRatePct}% win rate (${s.wins}W / ${s.losses}L).\n`;
+        reinforcementPrompt += `RECORD ON ${symbol}: ${s.totalOnSymbol} trades, ${s.winRatePct}% win rate (${s.wins}W / ${s.losses}L). Scalp WR: ${s.scalpWinRatePct ?? "N/A"}%, Normal WR: ${s.normalWinRatePct ?? "N/A"}%.\n`;
+        if (Array.isArray(s.recentLossNotes) && s.recentLossNotes.length > 0) {
+          reinforcementPrompt += `RECENT LOSSES TO AVOID REPEATING ON ${symbol}:\n${s.recentLossNotes
+            .map((n: string) => `- ${n}`)
+            .join("\n")}\n`;
+        }
       }
     }
 
+    const playbookBlock = `\nASSET PLAYBOOK (${playbook.title}):\n${playbook.rules
+      .map((r, i) => `${i + 1}. ${r}`)
+      .join("\n")}\n\nLIVE ECONOMIC / NEWS RISK (${newsRisk.level}): ${newsRisk.summary}\n`;
+
     const quantBlock = quantContext
-      ? `\nLIVE MARKET PRICE & TECHNICAL DATA (COMPUTED FROM REAL LIVE CANDLES — GROUND ALL PRICE NUMBERS IN THIS DATA):\n${JSON.stringify(
+      ? `\nLIVE MARKET PRICE, REGIME INDICATORS & TECHNICAL DATA (COMPUTED FROM REAL LIVE CANDLES — GROUND ALL PRICE NUMBERS IN THIS DATA):\n${JSON.stringify(
           quantContext,
           null,
           2
@@ -556,10 +756,11 @@ export default async function handler(req: any, res: any) {
 
 CRITICAL TONE & STYLE RULES (READ CAREFULLY):
 1. The user is an EVERYDAY TRADER — NOT an institutional bank desk! NEVER call the setup an "Institutional Setup", "Institutional Verdict", or flood the report with heavy jargon like "interbank delivery", "PD arrays", "Judas Swing", "Power of 3 AMD", or "Smart Money orderflow".
-2. Write in simple, crystal-clear, practical trading English: talk about Trend, Support & Resistance, Pullback Entry, Stop Loss, Take Profit, Candlestick Signals, Fakeouts, and Risk-to-Reward.
+2. Write in simple, crystal-clear, practical trading English: talk about Trend, Support & Resistance, Pullback Entry, Stop Loss, Take Profit, Candlestick Signals, Fakeouts, Market Regime (Trending/Ranging/Squeeze), News Risk, and Risk-to-Reward.
 3. ${styleRules}
 4. ALWAYS populate BOTH "scalpPlan" AND "normalPlan" with exact numbers grounded in the live price (${currentPrice || quantContext?.livePrice || "chart scale"}) and the provided live market data, while "tradeSetup" matches the user's selected mode (${tradingStyle}). NEVER invent random prices far from the live price.
 5. Current New York Time: ${nyTimeStr}. Session: ${killZoneName}.
+${playbookBlock}
 ${reinforcementPrompt}
 ${quantBlock}
 
@@ -657,6 +858,10 @@ Respond strictly with a single valid raw JSON object (no markdown fences) matchi
     parsedResult.tradingStyle = tradingStyle;
     parsedResult.styleLabel = parsedResult.styleLabel || (isScalp ? "Scalp Setup" : "Normal Trade Setup");
     parsedResult.estimatedHoldTime = parsedResult.estimatedHoldTime || (isScalp ? "5 – 45 mins" : "2 – 24 hours");
+    parsedResult.playbookTitle = playbook.title;
+    parsedResult.newsRisk = newsRisk;
+    parsedResult.marketRegime = quantContext?.marketRegime || null;
+    parsedResult.riskCritic = runRiskCriticAudit(parsedResult, tradingStyle, quantContext, newsRisk);
 
     res.status(200).json({
       success: true,

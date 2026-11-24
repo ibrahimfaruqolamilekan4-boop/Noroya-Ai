@@ -15,6 +15,10 @@ import {
   Zap,
   Sparkles,
   BookOpen,
+  Globe,
+  ExternalLink,
+  ShieldCheck,
+  Activity,
 } from "lucide-react";
 import { SyntheticSymbol } from "../data/symbols";
 import { TradingStyle } from "../lib/quantEngine";
@@ -288,6 +292,133 @@ export const VisionReportView: React.FC<VisionReportViewProps> = ({
           )}
         </div>
       </div>
+
+      {/* AI KNOWLEDGE ENGINE TELEMETRY: LIVE NEWS RISK + RISK CRITIC + MARKET REGIME */}
+      {(analysis.newsRisk || analysis.riskCritic || analysis.marketRegime) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* LIVE NEWS & ECONOMIC EVENT RISK */}
+          {analysis.newsRisk && (
+            <div
+              className={`rounded-xl border p-4 space-y-2.5 text-xs ${
+                analysis.newsRisk.level === "HIGH"
+                  ? "bg-rose-50/90 border-rose-300"
+                  : analysis.newsRisk.level === "MEDIUM"
+                  ? "bg-amber-50/90 border-amber-300"
+                  : "bg-[#F1F4F8] border-slate-300"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-bold text-slate-900">
+                  <Globe className="h-4 w-4 text-emerald-600" />
+                  <span>Live News &amp; Event Risk</span>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold ${
+                    analysis.newsRisk.level === "HIGH"
+                      ? "bg-rose-600 text-white"
+                      : analysis.newsRisk.level === "MEDIUM"
+                      ? "bg-amber-500 text-white"
+                      : "bg-emerald-600 text-white"
+                  }`}
+                >
+                  {analysis.newsRisk.level} RISK
+                </span>
+              </div>
+              <p className="text-slate-700 leading-relaxed">{analysis.newsRisk.summary}</p>
+              {Array.isArray(analysis.newsRisk.sources) && analysis.newsRisk.sources.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {analysis.newsRisk.sources.map((src: any, idx: number) => (
+                    <a
+                      key={idx}
+                      href={src.uri}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-white border border-slate-300 text-[10px] font-medium text-emerald-800 hover:border-emerald-500"
+                    >
+                      <span className="truncate max-w-[160px]">{src.title}</span>
+                      <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI RISK CRITIC VERIFICATION */}
+          {analysis.riskCritic && (
+            <div
+              className={`rounded-xl border p-4 space-y-2.5 text-xs ${
+                analysis.riskCritic.passed
+                  ? "bg-[#F1F4F8] border-slate-300"
+                  : analysis.riskCritic.verdictAdjusted
+                  ? "bg-rose-50/90 border-rose-300"
+                  : "bg-amber-50/90 border-amber-300"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 font-bold text-slate-900">
+                  {analysis.riskCritic.passed ? (
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  )}
+                  <span>AI Risk Critic Verification</span>
+                </div>
+                <span
+                  className={`px-2 py-0.5 rounded font-mono text-[10px] font-bold ${
+                    analysis.riskCritic.passed
+                      ? "bg-emerald-600 text-white"
+                      : "bg-amber-600 text-white"
+                  }`}
+                >
+                  {analysis.riskCritic.passed ? "7/7 PASSED" : `${analysis.riskCritic.warnings?.length || 1} FLAG`}
+                </span>
+              </div>
+              <p className="text-slate-700 leading-relaxed">{analysis.riskCritic.summary}</p>
+              {Array.isArray(analysis.riskCritic.warnings) && analysis.riskCritic.warnings.length > 0 && (
+                <ul className="space-y-1 text-[11px] text-slate-800 list-disc pl-4">
+                  {analysis.riskCritic.warnings.map((w: string, i: number) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* MARKET REGIME & PLAYBOOK STRIP */}
+          {analysis.marketRegime && (
+            <div className="lg:col-span-2 rounded-xl bg-[#F1F4F8] border border-slate-300 p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Activity className="h-4 w-4 text-emerald-600 shrink-0" />
+                <div>
+                  <span className="font-bold text-slate-900">
+                    Market Regime: {analysis.marketRegime.regimeLabel}
+                  </span>
+                  {analysis.playbookTitle && (
+                    <span className="ml-2 text-[11px] font-mono text-emerald-700">
+                      · {analysis.playbookTitle}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] tabular-nums">
+                <span className="px-2 py-1 rounded bg-[#E8ECF2] border border-slate-300 text-slate-800">
+                  ADX {analysis.marketRegime.adx14}
+                </span>
+                <span className="px-2 py-1 rounded bg-[#E8ECF2] border border-slate-300 text-slate-800">
+                  RSI(14) {analysis.marketRegime.rsi14}
+                </span>
+                <span className="px-2 py-1 rounded bg-[#E8ECF2] border border-slate-300 text-slate-800">
+                  VWAP {fmt(analysis.marketRegime.vwap)}
+                </span>
+                <span className="px-2 py-1 rounded bg-[#E8ECF2] border border-slate-300 text-slate-800">
+                  EMA20 {fmt(analysis.marketRegime.ema20)}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* STOP LOSS PROTECTION & SESSION TIMING */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
